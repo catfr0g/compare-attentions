@@ -19,7 +19,7 @@ uv sync --group dev --locked
 uv run --locked pre-commit install
 ```
 
-Перед коммитом pre-commit запускает `ruff check`, `ruff format` и `pylint`. pylint ограничивает модуль 500 строками.
+Перед коммитом pre-commit запускает `ruff check`, `ruff format`, `pylint` и `pytest`. pylint ограничивает модуль 500 строками.
 
 ## Датасет
 

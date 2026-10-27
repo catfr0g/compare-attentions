@@ -15,3 +15,11 @@ repos:
         types: [python]
         files: ^(src|tests)/
         exclude: ^(\.venv|\.uv-cache)/
+
+      - id: pytest
+        name: pytest
+        entry: uv run --locked pytest
+        language: system
+        pass_filenames: false
+        files: ^(src|tests)/|^pyproject\.toml$|^uv\.lock$
+        exclude: ^(\.venv|\.uv-cache)/
