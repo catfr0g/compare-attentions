@@ -16,21 +16,17 @@ uv sync --locked
 
 ```sh
 uv sync --group dev --locked
-uv run --locked ruff check .
-uv run --locked ruff format .
-uv run --locked pylint src
-uv run --locked pylint tests --max-module-lines=500
+uv run --locked pre-commit install
 ```
 
-pylint ограничивает модуль 300 строками в `src` и 500 в `tests`.
+Перед коммитом pre-commit запускает `ruff check`, `ruff format` и `pylint`. pylint ограничивает модуль 500 строками.
 
-Подготовить датасет `kv_retrieval` и проверить стиль:
+## Датасет
 
 ```sh
 uv run --locked prepare-kv-retrieval
 uv run --locked prepare-kv-retrieval --n-train 1000 --n-val 100 --n-test 100
 uv run --locked clean-kv-retrieval
-uv run --locked lint
 ```
 
 Повторный `prepare-kv-retrieval` с теми же параметрами ничего не перезаписывает. Другие параметры в том же каталоге требуют `--force`.
