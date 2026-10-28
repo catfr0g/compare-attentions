@@ -30,3 +30,14 @@ uv run --locked clean-kv-retrieval
 ```
 
 Повторный `prepare-kv-retrieval` с теми же параметрами ничего не перезаписывает. Другие параметры в том же каталоге требуют `--force`.
+
+## Обучение
+
+Пока уравнивается суммарный бюджет FLOPs на обучение (`train_flops`): цикл суммирует FLOPs реально выполненных операций. Оси `layer_flops` и `parameters` пока не отбирают сетку.
+
+```sh
+uv run --locked train --data data/kv_retrieval --train-flops 1000000000000
+uv run --locked train --data data/kv_retrieval --train-flops 1000000000000 --attention deltanet --dtype bfloat16
+```
+
+Для DeltaNet длина больше 64 считается чанковым ядром и требует `bfloat16`.
