@@ -7,11 +7,15 @@ name = "compare-attention"
 version = "0.1.0"
 description = "Reproducible attention experiments on synthetic tasks"
 readme = "README.md"
-requires-python = ">=3.14,<3.15"
+requires-python = ">=3.13,<3.14"
 dependencies = [
+    "clearml>=2.1.12",
     "flash-linear-attention>=0.6.0",
+    "huggingface-hub>=2.3.0",
     "numpy>=2.1,<3",
     "pydantic>=2,<3",
+    "python-dotenv>=1.2.4",
+    "pyyaml>=6.0.3",
     "torch>=2.6,<3",
     "tqdm>=4.66,<5",
     "triton>=3.3; sys_platform != 'win32'",
@@ -25,6 +29,8 @@ dev = [
     "pre-commit>=4,<5",
     "pylint>=3,<5",
     "ruff>=0.11,<1",
+    "testcontainers>=4.15.0",
+    "kaggle>=2.2.5",
 ]
 
 [project.scripts]
@@ -44,7 +50,7 @@ explicit = true
 packages = ["src/compare_attention"]
 
 [tool.ruff]
-target-version = "py314"
+target-version = "py313"
 line-length = 100
 
 [tool.ruff.lint]
@@ -52,10 +58,15 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not docker'"
+markers = [
+    "integration: лёгкие офлайн-тесты ClearML SDK (без сервера)",
+    "docker: требует docker и поднимает стек ClearML (docker compose)",
+]
 
 [tool.pylint.main]
 ignore-paths = ["^\\.venv", "^\\.uv-cache"]
-py-version = "3.14"
+py-version = "3.13"
 
 [tool.pylint.format]
 max-line-length = 100
@@ -71,4 +82,5 @@ disable = [
     "missing-module-docstring",
     "missing-class-docstring",
     "missing-function-docstring",
+    "line-too-long",
 ]

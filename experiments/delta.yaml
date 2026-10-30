@@ -1,0 +1,41 @@
+# Эксперимент-шаблон: флаги CLI переопределяют значения, так что можно исправить только нужное.
+#
+# DataLoader-секция kv: если data подготовлен заранее (prepare-kv-retrieval), секцию можно убрать.
+# Запуск: uv run --locked train --config experiments/smoke.yaml
+
+data: data/kv_retrieval
+
+schedule:
+  train_flops: 10_000_000_000_000
+  batch_size: 8
+  seed: 1337
+  dtype: bfloat16
+  compile: true
+
+optim:
+  learning_rate: 0.0003
+  weight_decay: 0.1
+
+model:
+  vocab_size: 8192
+  block_size: 512
+  n_layer: 12
+  n_head: 12
+  n_embd: 768
+  dropout: 0.0
+  bias: true
+  attention: deltanet
+
+# Приложение (необязательно): датасет подготовится сам, если data ещё нет.
+# kv:
+#   input_seq_len: 512
+#   num_kv_pairs: 64
+#   power_a: 0.01
+#   n_train: 100000
+#   n_val: 1000
+#   n_test: 1000
+#   dataset_seed: 1337
+
+# result_dir: models/smoke            # иначе models/<имя эксперимента>/<штамп>.
+# tracker: clearml                    # clearml OR disabled
+# hf_repo: user/compare-attention     # выгрузка результата в приватный HF-репо

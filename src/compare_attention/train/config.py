@@ -60,6 +60,20 @@ class Optim(BaseModel):
     weight_decay: float = Field(default=0.1, ge=0)
 
 
+class DatasetSpec(BaseModel):
+    """Параметры генерации kv_retrieval, если датасет ещё не готов."""
+
+    model_config = _FROZEN
+
+    input_seq_len: int = Field(default=512, ge=2)
+    num_kv_pairs: int = Field(default=64, ge=1)
+    power_a: float = Field(default=0.01, gt=0)
+    n_train: int = Field(default=100_000, ge=1)
+    n_val: int = Field(default=1_000, ge=1)
+    n_test: int = Field(default=1_000, ge=1)
+    dataset_seed: int = Field(default=1337, ge=0)
+
+
 class TrainConfig(BaseModel):
     """Один запуск: данные, сетка, бюджет."""
 

@@ -57,7 +57,7 @@ def _same_params(meta: dict[str, Any], config: KVRetrievalConfig) -> bool:
         return False
     try:
         return _config_from_meta(meta) == config
-    except KeyError, ValueError:
+    except (KeyError, ValueError):
         return False
 
 

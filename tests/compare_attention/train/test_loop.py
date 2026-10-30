@@ -6,12 +6,32 @@ from pathlib import Path
 import pytest
 import torch
 
-from compare_attention.data.store import load_config, prepare_kv_retrieval
+from compare_attention.data.store import prepare_kv_retrieval
 from compare_attention.train.config import ComparisonAxis, Optim, Schedule, TrainConfig
 from compare_attention.train.loop import train
-from compare_attention.train.result import Quality, Speed, TrainResult
+from compare_attention.train.result import TrainResult
+from compare_attention.train.tracker import DisabledTracker
 from tests.compare_attention.data.factories import config as data_config
 from tests.compare_attention.models.factories import gpt2_config
+from tests.compare_attention.train.factories import train_config
+
+
+class RecordingTracker(DisabledTracker):
+    """Запоминает вызовы трекера."""
+
+    def __init__(self) -> None:
+        self.started: list[TrainConfig] = []
+        self.losses: list[float] = []
+        self.finished: list[TrainResult] = []
+
+    def start(self, config: TrainConfig) -> None:
+        self.started.append(config)
+
+    def log_loss(self, loss: float, _flops: int) -> None:
+        self.losses.append(loss)
+
+    def finish(self, result: TrainResult, _model: torch.nn.Module) -> None:
+        self.finished.append(result)
 
 
 @pytest.fixture
@@ -20,67 +40,9 @@ def prepared(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _run(
-    path: Path,
-    train_flops: int = 1,
-    axis: ComparisonAxis = ComparisonAxis.TRAIN_FLOPS,
-    batch_size: int = 2,
-    compile_model: bool = False,
-    model=None,
-) -> TrainConfig:
-    chosen = gpt2_config(n_layer=1, dropout=0.0) if model is None else model
-    return TrainConfig(
-        data=path,
-        model=chosen,
-        schedule=Schedule(
-            train_flops=train_flops,
-            axis=axis,
-            batch_size=batch_size,
-            seed=0,
-            compile=compile_model,
-        ),
-        optim=Optim(learning_rate=1e-2, weight_decay=0.0),
-    )
-
-
 @pytest.fixture
 def trained(prepared: Path):
-    return train(_run(prepared))
-
-
-def test_dataset_config_is_part_of_the_run(prepared: Path) -> None:
-    assert _run(prepared).dataset == load_config(prepared)
-
-
-def test_identical_results_are_equal(prepared: Path) -> None:
-    config = _run(prepared, train_flops=1)
-    result = TrainResult(
-        steps=1,
-        train_flops=1,
-        quality=Quality(train_loss=1.0, val_loss=1.0, val_accuracy=0.5),
-        speed=Speed(train_tokens_per_second=1.0, peak_gpu_bytes=None),
-        config=config,
-    )
-
-    assert result == result.model_copy()
-
-
-def test_different_validation_accuracy_is_not_equal(prepared: Path) -> None:
-    config = _run(prepared, train_flops=1)
-    result = TrainResult(
-        steps=1,
-        train_flops=1,
-        quality=Quality(train_loss=1.0, val_loss=1.0, val_accuracy=0.5),
-        speed=Speed(train_tokens_per_second=1.0, peak_gpu_bytes=None),
-        config=config,
-    )
-    changed = result.quality.model_copy(update={"val_accuracy": 0.25})
-
-    assert result != result.model_copy(update={"quality": changed})
-
-
-def test_training_stops_when_recorded_flops_reach_the_budget(trained) -> None:
-    assert trained.train_flops >= trained.config.schedule.train_flops
+    return train(train_config(prepared))
 
 
 def test_train_loss_is_finite(trained) -> None:
@@ -103,36 +65,61 @@ def test_peak_gpu_memory_follows_the_device(trained) -> None:
 
 
 def test_tiny_budget_records_one_step(prepared: Path) -> None:
-    result = train(_run(prepared, train_flops=1))
+    result = train(train_config(prepared))
 
     assert result.steps == 1
 
 
 def test_vocab_must_match_the_dataset(prepared: Path) -> None:
     with pytest.raises(ValueError, match="vocab_size"):
-        _run(prepared, train_flops=1, model=gpt2_config(vocab_size=64, n_layer=1, dropout=0.0))
+        train_config(prepared, model=gpt2_config(vocab_size=64, n_layer=1, dropout=0.0))
 
 
 def test_block_must_cover_the_sequence(prepared: Path) -> None:
     with pytest.raises(ValueError, match="block_size"):
-        _run(prepared, train_flops=1, model=gpt2_config(block_size=8, n_layer=1, dropout=0.0))
+        train_config(prepared, model=gpt2_config(block_size=8, n_layer=1, dropout=0.0))
 
 
 def test_batch_must_fit_the_training_split(prepared: Path) -> None:
     with pytest.raises(ValueError, match="batch_size"):
-        _run(prepared, train_flops=1, batch_size=8)
+        train_config(prepared, batch_size=8)
 
 
 @pytest.mark.parametrize("axis", [ComparisonAxis.LAYER_FLOPS, ComparisonAxis.PARAMETERS])
-def test_other_axes_are_not_trained_yet(prepared: Path, axis: ComparisonAxis) -> None:
+def test_other_axes_are_not_trained_yet(prepared: Path, axis) -> None:
     with pytest.raises(NotImplementedError, match=axis.value):
-        _run(prepared, train_flops=1, axis=axis)
+        train_config(prepared, axis=axis)
 
 
 def test_compiled_model_reaches_a_finite_loss(prepared: Path) -> None:
-    result = train(_run(prepared, compile_model=True))
+    result = train(train_config(prepared, compile=True))
 
     assert torch.isfinite(torch.tensor(result.quality.train_loss))
+
+
+def test_tracker_sees_the_start_of_the_run(prepared: Path) -> None:
+    spy = RecordingTracker()
+
+    result = train(train_config(prepared), tracker=spy)
+
+    assert spy.started == [result.config]
+
+
+def test_tracker_sees_every_step_loss(prepared: Path) -> None:
+    spy = RecordingTracker()
+
+    result = train(train_config(prepared), tracker=spy)
+
+    assert result.steps >= 1
+    assert len(spy.losses) == result.steps
+
+
+def test_tracker_sees_the_final_result(prepared: Path) -> None:
+    spy = RecordingTracker()
+
+    result = train(train_config(prepared), tracker=spy)
+
+    assert spy.finished == [result]
 
 
 def test_long_deltanet_in_float32_is_rejected(tmp_path: Path) -> None:

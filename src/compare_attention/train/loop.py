@@ -18,13 +18,16 @@ from compare_attention.data.store import load_split
 from compare_attention.models.gpt2 import GPT2
 from compare_attention.train.config import TrainConfig
 from compare_attention.train.result import Quality, Speed, TrainResult
+from compare_attention.train.tracker import DisabledTracker, Tracker
 
 logger = logging.getLogger(__name__)
 
 
-def train(config: TrainConfig) -> TrainResult:
+def train(config: TrainConfig, tracker: Tracker | None = None) -> TrainResult:
     """Учить, пока сумма FLOPs шагов не достигнет бюджета."""
+    mirror = tracker if tracker is not None else DisabledTracker()
     _seed(config.schedule.seed)
+    mirror.start(config)
     train_x, train_y = _load(config.data, "train")
     val_x, val_y = _load(config.data, "val")
     model = GPT2(config.model)
@@ -33,7 +36,8 @@ def train(config: TrainConfig) -> TrainResult:
     model.to(device=device, dtype=dtype)
     compiled = _compile(model, config.schedule.compile)
     moved = tuple(tensor.to(device) for tensor in (train_x, train_y, val_x, val_y))
-    result = _run(config, compiled, moved, device)
+    result = _run(config, compiled, moved, device, mirror)
+    mirror.finish(result, model)
     logger.info("%s", result)
     return result
 
@@ -43,6 +47,7 @@ def _run(
     model: torch.nn.Module,
     tensors: tuple[Tensor, Tensor, Tensor, Tensor],
     device: torch.device,
+    tracker: Tracker,
 ) -> TrainResult:
     train_x, train_y, val_x, val_y = tensors
     optimizer = torch.optim.AdamW(
@@ -52,7 +57,7 @@ def _run(
     )
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats()
-    elapsed, losses, spent = _fit(config, model, optimizer, train_x, train_y)
+    elapsed, losses, spent = _fit(config, model, optimizer, train_x, train_y, tracker)
     quality = _quality(model, val_x, val_y, config.schedule.batch_size, losses)
     speed = _measured_speed(train_x, config, device, elapsed, len(losses))
     return TrainResult(
@@ -88,6 +93,7 @@ def _fit(
     optimizer: torch.optim.Optimizer,
     inputs: Tensor,
     labels: Tensor,
+    tracker: Tracker,
 ) -> tuple[float, list[float], int]:
     started = time.perf_counter()
     losses: list[float] = []
@@ -104,16 +110,36 @@ def _fit(
     )
     with counter, progress:
         while counter.get_total_flops() < config.schedule.train_flops:
-            batch_x, batch_y, cursor = _rows(inputs, labels, config.schedule.batch_size, cursor)
-            before = counter.get_total_flops()
-            losses.append(_step(model, optimizer, batch_x, batch_y))
-            step_flops = counter.get_total_flops() - before
-            if step_flops <= 0:
-                raise RuntimeError("training step recorded no flops")
-            progress.update(step_flops)
+            batch = config.schedule.batch_size
+            loss, cursor = _tracked_step(
+                model, optimizer, inputs, labels, batch, cursor, counter, tracker
+            )
+            losses.append(loss)
+            progress.update(counter.get_total_flops() - progress.n)
     if torch.cuda.is_available():
         torch.cuda.synchronize()
     return time.perf_counter() - started, losses, counter.get_total_flops()
+
+
+def _tracked_step(
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    inputs: Tensor,
+    labels: Tensor,
+    batch: int,
+    cursor: int,
+    counter: FlopCounterMode,
+    tracker: Tracker,
+) -> tuple[float, int]:
+    """Один шаг обучения: взять батч, посчитать FLOPs и отметить потерю."""
+    batch_x, batch_y, cursor = _rows(inputs, labels, batch, cursor)
+    before = counter.get_total_flops()
+    loss = _step(model, optimizer, batch_x, batch_y)
+    step_flops = counter.get_total_flops() - before
+    if step_flops <= 0:
+        raise RuntimeError("training step recorded no flops")
+    tracker.log_loss(loss, counter.get_total_flops())
+    return loss, cursor
 
 
 def _step(
