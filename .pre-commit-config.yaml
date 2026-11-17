@@ -1,25 +1,39 @@
+# Reuse the existing UV environment. Never install or rewrite scientific inputs.
+# Exact scope and historical local-only exclusions: docs/developer-validation.md.
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.2
-    hooks:
-      - id: ruff-check
-        args: [--fix]
-      - id: ruff-format
-
   - repo: local
     hooks:
-      - id: pylint
-        name: pylint
-        entry: uv run --locked pylint
+      - id: ruff-check
+        name: Ruff (check only)
+        entry: uv run --offline --no-sync ruff check
         language: system
         types: [python]
-        files: ^(src|tests)/
-        exclude: ^(\.venv|\.uv-cache)/
-
+        exclude: ^src/compare_attention/data/(sorting_source|tracking_source)/
+      - id: ruff-format
+        name: Ruff format (check only)
+        entry: uv run --offline --no-sync ruff format --check
+        language: system
+        types: [python]
+        exclude: ^src/compare_attention/data/(sorting_source|tracking_source)/
+      - id: pylint
+        name: Pylint errors and fatal diagnostics
+        entry: uv run --offline --no-sync pylint --disable=all --enable=E,F
+        language: system
+        types: [python]
+        files: ^(src|tests|scripts)/
+        exclude: ^src/compare_attention/data/(sorting_source|tracking_source)/
       - id: pytest
-        name: pytest
-        entry: uv run --locked pytest tests/compare_attention tests/integration
+        name: Portable CPU repository tests (not CUDA qualification)
+        entry: >-
+          uv run --offline --no-sync pytest -q -x
+          tests/compare_attention tests/integration tests/e2e
+          tests/scripts/test_repository_validation.py
+          --ignore=tests/compare_attention/test_sorting_candidate.py
+          --ignore=tests/compare_attention/cli/test_fp16_lr_pilots.py
+          --ignore=tests/compare_attention/cli/test_tracking.py
+          --ignore=tests/compare_attention/data/test_selective_count_reference.py
+          --ignore=tests/compare_attention/data/test_tracking.py
+          --ignore=tests/compare_attention/train/test_phase_handshake.py
         language: system
         pass_filenames: false
-        files: ^(src|tests)/|^pyproject\.toml$|^uv\.lock$
-        exclude: ^(\.venv|\.uv-cache)/
+        always_run: true

@@ -37,6 +37,7 @@ dev = [
 prepare-kv-retrieval = "compare_attention.cli.prepare_kv_retrieval:main"
 clean-kv-retrieval = "compare_attention.cli.prepare_kv_retrieval:clean_main"
 train = "compare_attention.cli.train:main"
+eval = "compare_attention.cli.evaluate:main"
 
 [tool.uv.sources]
 torch = [{ index = "pytorch-cu128", marker = "sys_platform != 'darwin'" }]
@@ -52,6 +53,12 @@ packages = ["src/compare_attention"]
 [tool.ruff]
 target-version = "py313"
 line-length = 100
+# Literal upstream snapshots, authenticated by SOURCE_HASHES in sorting.py/tracking.py.
+# Never autoformat or modernize these scientific reference bytes.
+extend-exclude = [
+    "src/compare_attention/data/sorting_source",
+    "src/compare_attention/data/tracking_source",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

@@ -1,0 +1,9 @@
+#!/bin/sh
+# Installed by scripts/install_hooks.sh; all Python runs through existing UV.
+set -eu
+export CUDA_VISIBLE_DEVICES=-1
+export PYTHONDONTWRITEBYTECODE=1
+export HF_HUB_DISABLE_TELEMETRY=1
+exec uv run --offline --no-sync python -B -m pre_commit hook-impl \
+    --config=.pre-commit-config.yaml --hook-type=pre-commit \
+    --hook-dir="$(git rev-parse --git-path hooks)" -- "$@"

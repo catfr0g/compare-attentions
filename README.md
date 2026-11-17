@@ -2,7 +2,7 @@
 
 Базовый Python-проект для экспериментов с механизмами внимания.
 
-Python 3.14, `uv`, PyTorch. Код проекта: `src/compare_attention/`.
+Python 3.13, `uv`, PyTorch. Код проекта: `src/compare_attention/`.
 
 ## Установка
 
@@ -33,7 +33,7 @@ uv run --locked clean-kv-retrieval
 
 ## Обучение
 
-Пока уравнивается суммарный бюджет FLOPs на обучение (`train_flops`): цикл суммирует FLOPs реально выполненных операций. Оси `layer_flops` и `parameters` пока не отбирают сетку.
+Бюджет `train_flops` задан в единицах версионированной политики `algorithmic_matmul_conv_v2`. Стоимость полного шага рассчитывается один раз: dense matmul, convolution и DeltaNet state-contractions, включая предусмотренный FLA backward recompute; MAC = 2 FLOPs. Цикл прибавляет эту стоимость после каждого реального шага оптимизатора. Это не полные аппаратные FLOPs: нормы, scalar non-contraction операции, loss, optimizer и validation исключены. Старые результаты `FlopCounterMode` относятся к другой метрике и не смешиваются с v2. Формулы и ограничения: `docs/flops-policy.md`, `docs/flops-delta.md`. Оси `layer_flops` и `parameters` пока не отбирают сетку.
 
 ```sh
 uv run --locked train --data data/kv_retrieval --train-flops 1000000000000
@@ -46,8 +46,8 @@ uv run --locked train --data data/kv_retrieval --train-flops 1000000000000 --att
 
 Результаты одного запуска раскладываются так:
 
-* **Метрики и логи** — [ClearML](https://clearml.io), облачный проект `compare-attention`: конфиг запуска, скаляры потерь по шагам, итог. ClearML сам захватывает stdout/stderr, поэтому консольный вывод с любой машины виден в UI у run'а.
-* **Каталог результата** — `--result-dir` (по умолчанию `models/<штамп времени>`): `train.log`, `model.pt` (веса обучения) и `metrics.jsonl` — строка `{type: step, loss, flops}` на каждый шаг обучения и `{type: result, ...}` с итогом запуска.
+* **Метрики и логи** — [ClearML](https://clearml.io), проект `compare-attention`: конфиг запуска, train loss по шагам, validation loss и accuracy, итог. Ось X для train и validation — накопленные train FLOPs. ClearML захватывает stdout/stderr, поэтому обычные строки прогресса видны в консоли задачи даже без TTY.
+* **Каталог результата** — `--result-dir` (по умолчанию `models/<штамп времени>`): `train.log`, `model.pt`, `metrics.jsonl` и `run_identity.json`. Identity схемы 2 содержит requested/effective seed, SHA256 начальных/конечных параметров, стоимость шага с версией политики и фактические вызовы Inductor отдельно для обучения и validation. Тот же объект сохраняется в `provenance` итоговой записи метрик. Журнал содержит `{type: step, loss, flops}` на каждый шаг, `{type: validation, loss, accuracy, flops}` на каждую проверку и `{type: result, ...}` с итогом запуска.
 * **Hugging Face** — с флагом `--hf-repo user/model` или переменной `HF_REPO` из `.env` каталог результата целиком сливается в приватный репозиторий (путь `runs/<имя каталога>`); нужен токен в переменной `HF_TOKEN`. Приоритет: `--hf-repo` → `HF_REPO` (окружение) → `HF_REPO` (файл `.env`); если ничего не задано, выгрузки нет.
 
 Разовый вход в ClearML (ключи с app.clear.ml):
@@ -59,6 +59,17 @@ uv run --locked clearml-init
 На тренировочных серверах вместо `clearml-init` удобен `.env.example`: скопируйте его в `.env`, заполните ключи — команда `train` сама читает `.env` из текущего каталога (переменные окружения имеют приоритет над файлом). SDK принимает и переменные окружения, и `~/clearml.conf`.
 
 Трекер выбирается флагом: `--tracker clearml` (по умолчанию) или `--tracker disabled` — для запусков без сети.
+
+Прогресс дублируется обычными строками в stdout и `train.log`: шаг, FLOPs и доля бюджета, loss, learning rate, токены в секунду и оценка оставшегося времени. В терминале дополнительно остаётся `tqdm` с текущим loss.
+
+Частоты задаются в секции `schedule` или флагами CLI:
+
+| YAML | CLI | По умолчанию |
+| --- | --- | --- |
+| `log_every_steps` | `--log-every-steps` | 10 шагов; первый и последний шаг пишутся всегда |
+| `val_every_steps` | `--val-every-steps` | 100 шагов; в конце validation выполняется всегда |
+
+Validation проверяет весь split `val`, без градиентов. Loss и accuracy учитывают только позиции с целевыми метками, без `IGNORE_INDEX`. Операции validation не входят в бюджет train FLOPs; её время не входит в скорость обучения и оценку оставшегося времени. Если последний шаг совпал с интервалом validation, повторной проверки нет.
 
 ## YAML-эксперименты
 
@@ -86,15 +97,29 @@ uv run --locked train --config experiments/smoke.yaml --train-flops 100    # ф�
 
 ## Запуск обучения на Kaggle
 
+Для новых серий рекомендуется `scripts/train_kaggle_series.py`: один зафиксированный release всех конфигов, общий проверенный read-only KV input, отдельная доставка credentials и журнал возобновления. Порядок подготовки, публикации, выборочного запуска и проверок описан в `docs/kaggle-series.md`. Ниже сохранён совместимый прежний интерфейс, который собирает пакет отдельно для каждого запуска.
+
 ```sh
 uv run --locked scripts/train_kaggle.py --config experiments/smoke.yaml
+# все YAML-файлы папки, последовательно:
+uv run --locked scripts/train_kaggle.py --config experiments --slug compare-attention-train
 # эквивалентно зеркальным флагам:
 uv run --locked scripts/train_kaggle.py --train-flops 1000000000 --n-layer 2
 ```
 
-С `--config` YAML-файл эксперимента копируется в тот же приватный dataset (внутри копии `data` переписывается на `/kaggle/working/kv_retrieval`, а секция `kv` подгоняет подготовку данных в ядре), ядро запускает `train --config /kaggle/input/.../<имя>.yaml`. Локальные флаги `--slug`/`--accelerator` и пр. по-прежнему работают; секции YAML перекрываются флагами локально.
+С `--config` YAML-файл эксперимента копируется в тот же приватный dataset (внутри копии `data` переписывается на `/kaggle/working/kv_retrieval`, а секция `kv` задаёт подготовку данных в ядре). Ядро запускает `train --config /kaggle/input/.../<имя>.yaml`. Параметры обучения, включая частоты логов и validation, берутся из YAML. Параметры запуска Kaggle, например `--slug` и `--accelerator`, задаются локальными флагами CLI.
 
-Схема: wheel проекта собирается локально (`uv build --wheel`), заливается в私有ный Kaggle dataset, генерируется kernel-скрипт и запускается на выбранном GPU (`--accelerator`, по умолчанию T4). Скрипт поллит статус и после завершения скачивает артефакты в `kaggle/<slug>/output`.
+Схема: wheel проекта собирается локально (`uv build --wheel`), загружается в приватный Kaggle dataset, генерируется kernel-скрипт и запускается на выбранном GPU (`--accelerator`, по умолчанию T4). Скрипт проверяет статус и после завершения скачивает артефакты в `kaggle/<slug>/output`.
+
+Если `--config` указывает папку:
+
+* Скрипт берёт только файлы `.yaml` и `.yml` непосредственно в этой папке. Подпапки и другие файлы пропускаются. Порядок запуска — сортировка по имени файла.
+* Каждый эксперимент получает slug `<базовый-slug>-<имя-файла-без-расширения>`. Например, `classic.yaml` с базой `compare-attention-train` сохраняет результаты в `kaggle/compare-attention-train-classic/output`.
+* Следующий эксперимент начинается только после завершения предыдущего и успешного скачивания его артефактов. При первой ошибке очередь останавливается с ненулевым кодом.
+* Все YAML-файлы и коллизии slug проверяются до сборки и загрузки. Пустая папка, отсутствующий путь или некорректный конфиг останавливают запуск до обращения к Kaggle.
+* Wheel собирается и загружается отдельно для каждого эксперимента. Это последовательные запуски, а не параллельные задания в Kaggle.
+
+В режиме папки базовый slug должен содержать 1–48 символов: строчные ASCII-буквы, цифры и одиночные внутренние дефисы. Имя файла переводится в нижний регистр, разделители заменяются дефисами; итоговый slug ограничен 50 символами. Имена без ASCII-букв и цифр не поддерживаются. Совпадения после преобразования или усечения считаются ошибкой. Для одного файла slug остаётся без суффикса.
 
 Креды Kaggle: `KAGGLE_USERNAME`/`KAGGLE_KEY` из `.env` (скрипт сам читает `.env`); `kaggle.json`/`kaggle auth login` тоже работают.
 

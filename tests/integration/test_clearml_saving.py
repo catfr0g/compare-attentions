@@ -43,6 +43,7 @@ def _run(config, task_id: str) -> None:
     task_id.append(tracker.task_id)
     tracker.log_loss(0.5, 128)
     tracker.log_loss(0.25, 256)
+    tracker.log_validation(0.4, 0.25, 256)
     tracker.finish(
         train_result(
             config,
@@ -80,6 +81,8 @@ def test_the_scalars_lands_in_the_offline_session(session: tuple[Path, str]) -> 
 
     assert ("train", "loss", 0.5, 128) in scalars
     assert ("train", "loss", 0.25, 256) in scalars
+    assert ("validation", "loss", 0.4, 256) in scalars
+    assert ("validation", "accuracy", 0.25, 256) in scalars
     assert ("result", "train_loss", 0.375, 2) in scalars
 
 

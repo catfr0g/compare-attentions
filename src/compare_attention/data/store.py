@@ -18,8 +18,17 @@ from compare_attention.data.config import (
     SOURCE,
     KVRetrievalConfig,
 )
+from compare_attention.data.permutation import PermutationConfig
+from compare_attention.data.permutation import verify_integrity as verify_permutation_integrity
 from compare_attention.data.records import KVRetrievalDataset, PrepareResult, TokenSplit
 from compare_attention.data.sampling import generate_dataset
+from compare_attention.data.selective_count import SelectiveCountConfig
+from compare_attention.data.selective_count import verify_integrity as verify_count_integrity
+from compare_attention.data.sorting import SortingConfig
+from compare_attention.data.sorting import verify_integrity as verify_sorting_integrity
+from compare_attention.data.tiny_shakespeare import CharacterLMConfig, verify_integrity
+from compare_attention.data.tracking import RulerConfig, StateRecallConfig
+from compare_attention.data.tracking import verify_integrity as verify_tracking_integrity
 
 logger = logging.getLogger(__name__)
 
@@ -153,12 +162,43 @@ def prepare_kv_retrieval(
     return PrepareResult(output_dir=destination, written=True)
 
 
-def load_config(output_dir: Path | str) -> KVRetrievalConfig:
+def load_config(
+    output_dir: Path | str,
+) -> (
+    KVRetrievalConfig
+    | CharacterLMConfig
+    | SelectiveCountConfig
+    | PermutationConfig
+    | RulerConfig
+    | StateRecallConfig
+    | SortingConfig
+):
     """Прочитать параметры из ``meta.json``."""
     destination = Path(output_dir)
     meta = _read_meta(destination)
     if meta is None:
         raise FileNotFoundError(destination / META_NAME)
+    if meta.get("name") == "sorting":
+        sorting_config = SortingConfig.model_validate(meta)
+        verify_sorting_integrity(destination, sorting_config, source_parity=False)
+        return sorting_config
+    if meta.get("name") in {"ruler_variable_tracking", "state_based_recall"}:
+        kind = RulerConfig if meta["name"] == "ruler_variable_tracking" else StateRecallConfig
+        tracking_config = kind.model_validate(meta)
+        verify_tracking_integrity(destination, tracking_config)
+        return tracking_config
+    if meta.get("name") == "permutation":
+        permutation_config = PermutationConfig.model_validate(meta)
+        verify_permutation_integrity(destination, permutation_config)
+        return permutation_config
+    if meta.get("name") == "selective_count":
+        count_config = SelectiveCountConfig.model_validate(meta)
+        verify_count_integrity(destination, count_config)
+        return count_config
+    if meta.get("name") == "tiny_shakespeare_char":
+        character_config = CharacterLMConfig.model_validate(meta)
+        verify_integrity(destination, character_config)
+        return character_config
     parsed = _config_from_meta(meta)
     if not _same_params(meta, parsed):
         meta_path = destination / META_NAME

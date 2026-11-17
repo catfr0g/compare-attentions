@@ -1,0 +1,8 @@
+# Preserve authenticated scientific bytes across Windows checkout/staging.
+# These are text files, but newline rewriting invalidates wheel/source pins.
+src/compare_attention/** -text
+experiments/** -text
+
+# Developer hook scripts must be directly executable by Git Bash/POSIX shells.
+.githooks/* text eol=lf
+scripts/*.sh text eol=lf

@@ -10,7 +10,12 @@ import torch
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from compare_attention.data.config import KVRetrievalConfig
+from compare_attention.data.permutation import PermutationConfig
+from compare_attention.data.selective_count import SelectiveCountConfig
+from compare_attention.data.sorting import SortingConfig
 from compare_attention.data.store import load_config
+from compare_attention.data.tiny_shakespeare import CharacterLMConfig
+from compare_attention.data.tracking import RulerConfig, StateRecallConfig
 from compare_attention.models.config import GPT2Config
 
 _FROZEN = ConfigDict(frozen=True)
@@ -42,10 +47,41 @@ class Schedule(BaseModel):
     )
     batch_size: int = Field(default=8, ge=1)
     seed: int = Field(default=1337, ge=0)
-    dtype: Literal["float32", "bfloat16"] = "float32"
+    dtype: Literal["float32", "bfloat16", "float16"] = "float32"
     compile: bool = Field(default=True, description="Собрать модель через torch.compile.")
+    val_every_steps: int = Field(
+        default=100, ge=1, description="Считать validation каждые N шагов и в конце обучения."
+    )
+    log_every_steps: int = Field(
+        default=10, ge=1, description="Писать прогресс каждые N шагов, а также первый и последний."
+    )
+
+    checkpoint_every_steps: int = Field(
+        default=0, ge=0, description="Сохранять состояние каждые N обновлений; 0 отключает."
+    )
+    checkpoint_keep_last: int = Field(default=2, ge=1, description="Число последних snapshots.")
+    early_stopping_patience: int = Field(
+        default=0, ge=0, description="Остановить после N validation без улучшения; 0 отключает."
+    )
+    early_stopping_min_delta: float = Field(
+        default=0.001,
+        ge=0,
+        allow_inf_nan=False,
+        description="Минимальное уменьшение validation loss для сброса patience.",
+    )
+    early_stopping_min_steps: int = Field(
+        default=2000, ge=0, description="Не считать patience до этого числа обновлений."
+    )
+    amp_max_scale: float | None = Field(
+        default=None,
+        ge=128,
+        allow_inf_nan=False,
+        description="Потолок FP16 GradScaler; None сохраняет неограниченный рост.",
+    )
 
     def torch_dtype(self) -> torch.dtype:
+        if self.dtype == "float16":
+            return torch.float16
         if self.dtype == "bfloat16":
             return torch.bfloat16
         return torch.float32
@@ -58,6 +94,9 @@ class Optim(BaseModel):
 
     learning_rate: float = Field(default=3e-4, gt=0)
     weight_decay: float = Field(default=0.1, ge=0)
+    lr_schedule: Literal["constant", "warmup_cosine"] = "constant"
+    warmup_fraction: float = Field(default=0.05, ge=0, lt=1, allow_inf_nan=False, strict=True)
+    min_lr_ratio: float = Field(default=0.1, ge=0, le=1, allow_inf_nan=False, strict=True)
 
 
 class DatasetSpec(BaseModel):
@@ -83,7 +122,15 @@ class TrainConfig(BaseModel):
     model: GPT2Config
     schedule: Schedule
     optim: Optim = Field(default_factory=Optim)
-    dataset: KVRetrievalConfig
+    dataset: (
+        KVRetrievalConfig
+        | CharacterLMConfig
+        | SelectiveCountConfig
+        | PermutationConfig
+        | RulerConfig
+        | StateRecallConfig
+        | SortingConfig
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -124,5 +171,5 @@ class TrainConfig(BaseModel):
             self.model.attention == "deltanet" and self.dataset.input_seq_len > DELTA_CHUNKED_ABOVE
         )
         if long_deltanet and self.schedule.dtype == "float32":
-            raise ValueError("deltanet sequences longer than 64 require bfloat16")
+            raise ValueError("deltanet sequences longer than 64 require bfloat16 or float16")
         return self

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from compare_attention.train.config import TrainConfig
 
@@ -38,10 +40,14 @@ class TrainResult(BaseModel):
     quality: Quality
     speed: Speed
     config: TrainConfig
+    stop_reason: Literal["budget_exhausted", "early_stopping"] = "budget_exhausted"
+    early_stopping: dict[str, object] = Field(default_factory=dict)
+    provenance: dict[str, object] = Field(default_factory=dict)
 
     def __str__(self) -> str:
         lines = (
             f"steps={self.steps}",
+            f"stop_reason={self.stop_reason}",
             f"train_flops={self.train_flops}",
             f"train_loss={self.quality.train_loss:.4f}",
             f"val_loss={self.quality.val_loss:.4f}",

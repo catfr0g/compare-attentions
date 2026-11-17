@@ -17,6 +17,8 @@ def yaml_path(tmp_path: Path) -> Path:
         data: data/kv_retrieval
         schedule:
           train_flops: 7
+          val_every_steps: 3
+          log_every_steps: 2
         optim:
           weight_decay: 0.05
         model:
@@ -40,6 +42,8 @@ def test_yaml_fills_the_defaults(yaml_path: Path) -> None:
 
     assert args.schedule.train_flops == 7
     assert args.schedule.batch_size == 8
+    assert args.schedule.val_every_steps == 3
+    assert args.schedule.log_every_steps == 2
     assert args.optim.weight_decay == 0.05
     assert args.model.attention == "deltanet"
     assert args.model.n_layer == 3
@@ -51,9 +55,22 @@ def test_yaml_fills_the_defaults(yaml_path: Path) -> None:
 
 
 def test_cli_flags_over_the_yaml(yaml_path: Path) -> None:
-    args = parse_train_args(["--config", str(yaml_path), "--train-flops", "9"])
+    args = parse_train_args(
+        [
+            "--config",
+            str(yaml_path),
+            "--train-flops",
+            "9",
+            "--val-every-steps",
+            "7",
+            "--log-every-steps",
+            "5",
+        ]
+    )
 
     assert args.schedule.train_flops == 9
+    assert args.schedule.val_every_steps == 7
+    assert args.schedule.log_every_steps == 5
 
 
 def test_yaml_values_stay_without_cli_flags(yaml_path: Path) -> None:

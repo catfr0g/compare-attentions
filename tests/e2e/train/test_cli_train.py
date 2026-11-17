@@ -26,10 +26,16 @@ def _run(tmp_path: Path) -> Path:
     return result_dir
 
 
-def test_train_command_writes_a_log_to_the_result_dir(tmp_path: Path) -> None:
+def test_train_command_writes_a_log_to_the_result_dir(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     result_dir = _run(tmp_path)
 
-    assert (result_dir / "train.log").exists()
+    content = (result_dir / "train.log").read_text(encoding="utf-8")
+    assert "train step=1 " in content
+    assert "validation step=1 " in content
+    assert "val_accuracy=" in content
+    assert "train step=1 " in capsys.readouterr().out
 
 
 def test_train_command_leaves_a_checkpoint(tmp_path: Path) -> None:

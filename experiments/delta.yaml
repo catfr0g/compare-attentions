@@ -6,7 +6,7 @@
 data: data/kv_retrieval
 
 schedule:
-  train_flops: 10_000_000_000_000
+  train_flops: 1_000_000_000_000_000
   batch_size: 8
   seed: 1337
   dtype: bfloat16

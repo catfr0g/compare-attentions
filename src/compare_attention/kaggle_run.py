@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import ast
-import enum
 import glob
 import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import zipfile
@@ -24,6 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from tyro.conf import OmitArgPrefixes
 
 from compare_attention.cli.train import _derived_flags, load_experiment
+from compare_attention.kaggle_batch import plan_experiments
 from compare_attention.kaggle_kernel import (  # noqa: F401
     _KERNEL_TEMPLATE,
     SECRETS,
@@ -71,7 +72,7 @@ class KaggleArgs(BaseModel):
     kv: OmitArgPrefixes[DatasetSpec] = Field(default_factory=DatasetSpec)
     config: Path | None = Field(
         default=None,
-        description="YAML-файл эксперимента: уезжает в датасет, ядро запускает train --config.",
+        description="YAML-файл или папка .yaml/.yml; папка запускается по очереди, без рекурсии.",
     )
     owner: str | None = Field(
         default=None, description="Kaggle-логин; по умолчанию KAGGLE_USERNAME"
@@ -151,18 +152,7 @@ def _dump(arguments: list[str]) -> str:
 
 def _flags(spec: BaseModel) -> list[str]:
     """Pydantic-спецификация в плоский список --flag=value (bool --no-flag/--flag)."""
-    flags: list[str] = []
-    for name, _field in spec.model_fields.items():
-        value = getattr(spec, name)
-        rendered = name.replace("_", "-")
-        if isinstance(value, enum.Enum):
-            flags.append(f"--{rendered}={value.name}")
-            continue
-        if isinstance(value, bool):
-            flags.append(f"--{rendered}" if value else f"--no-{rendered}")
-            continue
-        flags += [f"--{rendered}={value}"]
-    return flags
+    return _derived_flags(spec)
 
 
 def stage_wheel_dataset(staging: Path, wheel: Path, owner: str, slug: str) -> None:
@@ -249,7 +239,9 @@ def stage_requirements(staging: Path, run: Runner | None = None) -> None:
     if run is _cli_run:
         subprocess.run(command, check=True, cwd=str(root), capture_output=True, text=True)
     else:
-        run(command)
+        completed = run(command)
+        if completed.returncode != 0:
+            raise RuntimeError("uv export не прошёл")
 
 
 def stage_experiment(staging: Path, args: KaggleArgs) -> None:
@@ -280,7 +272,9 @@ def build_wheel(staging: Path, run: Runner | None = None) -> Path:
     dist = staging / "wheel"
     if dist.is_dir():
         shutil.rmtree(dist)
-    kaggle(["uv", "build", "--wheel", "-o", str(dist)])
+    completed = kaggle(["uv", "build", "--wheel", "-o", str(dist)])
+    if completed.returncode != 0:
+        raise RuntimeError("uv build не прошёл")
     wheels = glob.glob(str(dist / "*.whl"))
     if not wheels:
         raise RuntimeError("uv build не положил wheel в каталог")
@@ -353,6 +347,8 @@ def poll_status(
     deadline = None if timeout is None else time.monotonic() + timeout
     while True:
         completed = kaggle(["kaggle", "kernels", "status", owner_slug])
+        if completed.returncode != 0:
+            raise RuntimeError(f"kaggle kernels status не прошёл: {owner_slug}")
         status = _status_of(completed.stdout or completed.stderr)
         if status in TERMINAL:
             return status
@@ -389,6 +385,8 @@ def poll_dataset_ready(
     deadline = time.monotonic() + timeout
     while True:
         completed = kaggle(["kaggle", "datasets", "status", owner_slug])
+        if completed.returncode != 0:
+            raise RuntimeError(f"kaggle datasets status не прошёл: {owner_slug}")
         status = (completed.stdout or "").lower()
         if "ready" in status:
             return
@@ -421,12 +419,30 @@ def _prepare_kaggle_cli() -> None:
 
 
 def main(argv: list[str] | None = None, run: Runner | None = None) -> int:
+    args = tyro.cli(KaggleArgs, args=argv)
+    try:
+        experiments = plan_experiments(args.config, args.slug)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     load_dotenv(find_dotenv(usecwd=True))
     _prepare_kaggle_cli()
-    args = tyro.cli(KaggleArgs, args=argv)
     owner = args.owner or os.getenv("KAGGLE_USERNAME")
     if not owner:
         raise SystemExit("укажите --owner или переменную KAGGLE_USERNAME")
+    for config, slug in experiments:
+        try:
+            experiment_args = args.model_copy(update={"config": config, "slug": slug})
+            code = _run_experiment(experiment_args, owner, run)
+        except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+            print(f"запуск {slug} завершился с ошибкой: {exc}", file=sys.stderr)
+            return 5
+        if code != 0:
+            return code
+    return 0
+
+
+def _run_experiment(args: KaggleArgs, owner: str, run: Runner | None) -> int:
+    """Завершить один запуск и скачать результат до следующего push."""
     staging = Path("kaggle") / args.slug
     staging.mkdir(parents=True, exist_ok=True)
     wheel = build_wheel(staging, run=run)
@@ -450,6 +466,7 @@ def main(argv: list[str] | None = None, run: Runner | None = None) -> int:
         timeout=float(args.timeout),
     )
     if status != COMPLETE:
+        print(f"запуск {owner_slug}: {status}", file=sys.stderr)
         return 5
     download_output(staging / "output", owner_slug, run=run)
     cleanup_debug_dirs(staging)

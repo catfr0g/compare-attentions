@@ -1,6 +1,7 @@
 # pylint: disable=redefined-outer-name,too-few-public-methods
 """Трекер обучения."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -203,3 +204,34 @@ def test_group_tracker_drives_all_trackers(
     rows = (tmp_path / "metrics.jsonl").read_text(encoding="utf-8").splitlines()
     assert len(rows) == 2
     assert (tmp_path / "model.pt").is_file()
+
+
+def test_group_tracker_records_validation_in_clearml_and_the_journal(
+    prepared: Path,
+    task_factory,
+    created_tasks: list[RecordingTask],
+    tmp_path: Path,
+) -> None:
+    group = GroupTracker(
+        DisabledTracker(), ClearMLTracker(task_factory=task_factory), BackupTracker(tmp_path)
+    )
+    group.start(train_config(prepared))
+
+    group.log_validation(0.4, 0.75, 256)
+
+    assert created_tasks[0].logger.scalars == [
+        ("validation", "loss", 0.4, 256),
+        ("validation", "accuracy", 0.75, 256),
+    ]
+    rows = (tmp_path / "metrics.jsonl").read_text(encoding="utf-8").splitlines()
+    assert [json.loads(row) for row in rows] == [
+        {"type": "validation", "loss": 0.4, "accuracy": 0.75, "flops": 256}
+    ]
+
+
+def test_group_optional_checkpoint_sink(tmp_path):
+    group = GroupTracker(DisabledTracker(), BackupTracker(tmp_path))
+    assert group.save_checkpoint({"step": 1}, 1, 2) is None
+    assert (tmp_path / "checkpoints" / "latest.json").exists()
+    with pytest.raises(RuntimeError, match="checkpoint"):
+        GroupTracker(DisabledTracker()).save_checkpoint({"step": 1}, 1, 2)

@@ -10,6 +10,7 @@ from clearml import Task
 
 from compare_attention.train.backup import BackupTracker
 from compare_attention.train.config import TrainConfig
+from compare_attention.train.identity import record_identity
 from compare_attention.train.result import TrainResult
 
 _PROJECT = "compare-attention"
@@ -51,6 +52,9 @@ class DisabledTracker:
     def log_loss(self, _loss: float, _flops: int) -> None:
         pass
 
+    def log_validation(self, _loss: float, _accuracy: float, _flops: int) -> None:
+        pass
+
     def finish(self, _result: TrainResult, _model: torch.nn.Module) -> None:
         pass
 
@@ -82,6 +86,23 @@ class ClearMLTracker:
             raise RuntimeError("start() must be called first")
         self._logger.report_scalar(title="train", series="loss", value=loss, iteration=flops)
 
+    def log_learning_rate(self, learning_rate: float, flops: int) -> None:
+        """Use the same exact successful-update FLOPs axis as train loss."""
+        if self._task is None or self._logger is None:
+            raise RuntimeError("start() must be called first")
+        self._logger.report_scalar(
+            title="train", series="learning_rate", value=learning_rate, iteration=flops
+        )
+
+    def log_validation(self, loss: float, accuracy: float, flops: int) -> None:
+        """Качество на validation по той же оси FLOPs, что и train loss."""
+        if self._task is None or self._logger is None:
+            raise RuntimeError("start() must be called first")
+        self._logger.report_scalar(title="validation", series="loss", value=loss, iteration=flops)
+        self._logger.report_scalar(
+            title="validation", series="accuracy", value=accuracy, iteration=flops
+        )
+
     def finish(self, result: TrainResult, _model: torch.nn.Module) -> None:
         """Отметить итог и закрыть задачу."""
         if self._task is None or self._logger is None:
@@ -89,6 +110,9 @@ class ClearMLTracker:
         serieses = {
             "steps": float(result.steps),
             "train_flops": float(result.train_flops),
+            "requested_train_flops": float(result.config.schedule.train_flops),
+            "early_stopped": float(result.stop_reason == "early_stopping"),
+            "budget_exhausted": float(result.train_flops >= result.config.schedule.train_flops),
             "train_loss": result.quality.train_loss,
             "val_loss": result.quality.val_loss,
             "val_accuracy": result.quality.val_accuracy,
@@ -119,13 +143,50 @@ class GroupTracker:
         for tracker in self._trackers:
             tracker.start(config)
 
+    def validate_resume_destination(self) -> None:
+        """Preflight every nested persistent sink before any tracker starts."""
+        for tracker in self._trackers:
+            validate_resume_destination(tracker)
+
+    def save_checkpoint(self, payload: dict, step: int, keep_last: int) -> None:
+        """Forward to optional sinks; fail closed if no sink accepts checkpoints."""
+        sinks = [getattr(tracker, "save_checkpoint", None) for tracker in self._trackers]
+        sinks = [sink for sink in sinks if callable(sink)]
+        if not sinks:
+            raise RuntimeError("checkpoint enabled but no accepting checkpoint sink")
+        for sink in sinks:
+            sink(payload, step, keep_last)
+
+    def record_identity(self, identity: dict[str, object]) -> None:
+        """Forward optional provenance events without requiring legacy trackers to change."""
+        for tracker in self._trackers:
+            record_identity(tracker, identity)
+
     def log_loss(self, loss: float, flops: int) -> None:
         for tracker in self._trackers:
             tracker.log_loss(loss, flops)
 
+    def log_learning_rate(self, learning_rate: float, flops: int) -> None:
+        """Fan out optional LR callbacks, retaining legacy/custom tracker support."""
+        for tracker in self._trackers:
+            callback = getattr(tracker, "log_learning_rate", None)
+            if callable(callback):
+                callback(learning_rate, flops)
+
+    def log_validation(self, loss: float, accuracy: float, flops: int) -> None:
+        for tracker in self._trackers:
+            tracker.log_validation(loss, accuracy, flops)
+
     def finish(self, result: TrainResult, model: torch.nn.Module) -> None:
         for tracker in self._trackers:
             tracker.finish(result, model)
+
+
+def validate_resume_destination(tracker: Tracker) -> None:
+    """Run an optional sink preflight without initializing trackers or touching RNG."""
+    validate = getattr(tracker, "validate_resume_destination", None)
+    if callable(validate):
+        validate()
 
 
 def select(kind: str) -> Tracker:

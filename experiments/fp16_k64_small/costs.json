@@ -1,0 +1,222 @@
+{
+  "names": [
+    "experiments/fp16_k64_small/full/classic/seed_42.yaml",
+    "experiments/fp16_k64_small/full/deltanet/seed_42.yaml"
+  ],
+  "configs": [
+    {
+      "path": "experiments/fp16_k64_small/full/classic/seed_42.yaml",
+      "estimate": {
+        "policy": "algorithmic_matmul_conv_v2",
+        "forward": 77309411328,
+        "backward": 154618822656,
+        "total": 231928233984,
+        "breakdown": {
+          "attention.qkv": {
+            "forward": 6442450944,
+            "backward": 12884901888
+          },
+          "attention.output": {
+            "forward": 2147483648,
+            "backward": 4294967296
+          },
+          "attention.qk": {
+            "forward": 8589934592,
+            "backward": 17179869184
+          },
+          "attention.av": {
+            "forward": 8589934592,
+            "backward": 17179869184
+          },
+          "mlp.expand": {
+            "forward": 8589934592,
+            "backward": 17179869184
+          },
+          "mlp.contract": {
+            "forward": 8589934592,
+            "backward": 17179869184
+          },
+          "lm_head": {
+            "forward": 34359738368,
+            "backward": 68719476736
+          }
+        },
+        "metadata": {
+          "schema_version": 1,
+          "shape": {
+            "batch_size": 32,
+            "sequence_length": 512,
+            "hidden_size": 128,
+            "num_heads": 4,
+            "num_layers": 4,
+            "vocab_size": 8192
+          },
+          "attention": "classic",
+          "architecture": "repository_gpt2_v1",
+          "included": [
+            "dense_matmul"
+          ],
+          "mac_flops": 2,
+          "causal_convention": "dense_square",
+          "padding_convention": "logical_tokens_no_kernel_padding",
+          "recompute": "none",
+          "excluded": [
+            "optimizer",
+            "non_contraction_elementwise",
+            "non_contraction_reductions",
+            "embedding_gather_scatter",
+            "loss",
+            "validation",
+            "kernel_padding",
+            "hardware_instructions"
+          ]
+        }
+      },
+      "train_flops": 10000000000000000,
+      "expected_updates": 43117,
+      "expected_examples": 1379744,
+      "expected_supervised_targets": 88303616,
+      "finite_pool_cycles": 13.79744,
+      "expected_completed_flops": 10000049664688128,
+      "budget_overshoot": 49664688128
+    },
+    {
+      "path": "experiments/fp16_k64_small/full/deltanet/seed_42.yaml",
+      "estimate": {
+        "policy": "algorithmic_matmul_conv_v2",
+        "forward": 68031610880,
+        "backward": 143545860096,
+        "total": 211577470976,
+        "breakdown": {
+          "attention.q_projection": {
+            "forward": 2147483648,
+            "backward": 4294967296
+          },
+          "attention.k_projection": {
+            "forward": 2147483648,
+            "backward": 4294967296
+          },
+          "attention.v_projection": {
+            "forward": 2147483648,
+            "backward": 4294967296
+          },
+          "attention.output_projection": {
+            "forward": 2147483648,
+            "backward": 4294967296
+          },
+          "attention.beta_projection": {
+            "forward": 67108864,
+            "backward": 134217728
+          },
+          "attention.short_convolution": {
+            "forward": 201326592,
+            "backward": 603979776
+          },
+          "attention.qk_l2norm": {
+            "forward": 0,
+            "backward": 0
+          },
+          "attention.output_rmsnorm": {
+            "forward": 0,
+            "backward": 0
+          },
+          "attention.chunk_gram": {
+            "forward": 1073741824,
+            "backward": 0
+          },
+          "attention.chunk_inverse": {
+            "forward": 654311424,
+            "backward": 0
+          },
+          "attention.chunk_wy": {
+            "forward": 2147483648,
+            "backward": 0
+          },
+          "attention.chunk_state": {
+            "forward": 1073741824,
+            "backward": 0
+          },
+          "attention.chunk_output": {
+            "forward": 2684354560,
+            "backward": 0
+          },
+          "attention.chunk_recompute_wy": {
+            "forward": 0,
+            "backward": 2147483648
+          },
+          "attention.chunk_recompute_state": {
+            "forward": 0,
+            "backward": 1073741824
+          },
+          "attention.chunk_local_dv": {
+            "forward": 0,
+            "backward": 2147483648
+          },
+          "attention.chunk_reverse_state": {
+            "forward": 0,
+            "backward": 1610612736
+          },
+          "attention.chunk_qkw_grad": {
+            "forward": 0,
+            "backward": 4831838208
+          },
+          "attention.chunk_wy_grad": {
+            "forward": 0,
+            "backward": 10737418240
+          },
+          "mlp.expand": {
+            "forward": 8589934592,
+            "backward": 17179869184
+          },
+          "mlp.contract": {
+            "forward": 8589934592,
+            "backward": 17179869184
+          },
+          "lm_head": {
+            "forward": 34359738368,
+            "backward": 68719476736
+          }
+        },
+        "metadata": {
+          "schema_version": 1,
+          "shape": {
+            "batch_size": 32,
+            "sequence_length": 512,
+            "hidden_size": 128,
+            "num_heads": 4,
+            "num_layers": 4,
+            "vocab_size": 8192
+          },
+          "attention": "deltanet",
+          "architecture": "repository_gpt2_v1",
+          "included": [
+            "dense_matmul",
+            "convolution",
+            "delta_core_contractions"
+          ],
+          "mac_flops": 2,
+          "causal_convention": "fla_causal_recurrence_or_chunk64",
+          "padding_convention": "logical_tokens_no_kernel_padding",
+          "recompute": "fla_default_backward_recompute",
+          "excluded": [
+            "optimizer",
+            "non_contraction_elementwise",
+            "non_contraction_reductions",
+            "embedding_gather_scatter",
+            "loss",
+            "validation",
+            "kernel_padding",
+            "hardware_instructions"
+          ]
+        }
+      },
+      "train_flops": 10000000000000000,
+      "expected_updates": 47265,
+      "expected_examples": 1512480,
+      "expected_supervised_targets": 96798720,
+      "finite_pool_cycles": 15.1248,
+      "expected_completed_flops": 10000209165680640,
+      "budget_overshoot": 209165680640
+    }
+  ]
+}

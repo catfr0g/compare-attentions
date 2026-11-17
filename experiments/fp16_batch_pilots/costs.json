@@ -1,0 +1,883 @@
+{
+  "schema_version": 1,
+  "prepared_data": "E:\\HermesArtifacts\\compare-attention\\fp16-long-controls\\69c8c4014f402d61b7181a3871c5b15d2cd904a6551d2fd44c3fc26bdb7d5c8f\\data",
+  "metadata_sha256": "30e86af308326f871097e6eb31f5d6ade6629dc5b3f4b19b078110cbe46ebfb2",
+  "dataset": {
+    "vocab_size": 8192,
+    "input_seq_len": 512,
+    "num_kv_pairs": 64,
+    "power_a": 0.01,
+    "n_train": 100000,
+    "n_val": 1000,
+    "n_test": 1000,
+    "seed": 1337
+  },
+  "configs": [
+    {
+      "path": "classic/batch_8/seed_42.yaml",
+      "stage": "pilot",
+      "family": "classic",
+      "batch_size": 8,
+      "train_flops": 10000000000000000,
+      "expected_updates": 4043,
+      "expected_completed_flops": 10001982399971328,
+      "budget_overshoot": 1982399971328,
+      "config_sha256": "528e403e50d3c346afc6210e8d4e8891e7ce62afe3cd7513e9aefd2f5124f166",
+      "estimate": {
+        "policy": "algorithmic_matmul_conv_v2",
+        "forward": 824633720832,
+        "backward": 1649267441664,
+        "total": 2473901162496,
+        "breakdown": {
+          "attention.qkv": {
+            "forward": 173946175488,
+            "backward": 347892350976
+          },
+          "attention.output": {
+            "forward": 57982058496,
+            "backward": 115964116992
+          },
+          "attention.qk": {
+            "forward": 38654705664,
+            "backward": 77309411328
+          },
+          "attention.av": {
+            "forward": 38654705664,
+            "backward": 77309411328
+          },
+          "mlp.expand": {
+            "forward": 231928233984,
+            "backward": 463856467968
+          },
+          "mlp.contract": {
+            "forward": 231928233984,
+            "backward": 463856467968
+          },
+          "lm_head": {
+            "forward": 51539607552,
+            "backward": 103079215104
+          }
+        },
+        "metadata": {
+          "schema_version": 1,
+          "shape": {
+            "batch_size": 8,
+            "sequence_length": 512,
+            "hidden_size": 768,
+            "num_heads": 12,
+            "num_layers": 12,
+            "vocab_size": 8192
+          },
+          "attention": "classic",
+          "architecture": "repository_gpt2_v1",
+          "included": [
+            "dense_matmul"
+          ],
+          "mac_flops": 2,
+          "causal_convention": "dense_square",
+          "padding_convention": "logical_tokens_no_kernel_padding",
+          "recompute": "none",
+          "excluded": [
+            "optimizer",
+            "non_contraction_elementwise",
+            "non_contraction_reductions",
+            "embedding_gather_scatter",
+            "loss",
+            "validation",
+            "kernel_padding",
+            "hardware_instructions"
+          ]
+        }
+      }
+    },
+    {
+      "path": "classic/batch_32/seed_42.yaml",
+      "stage": "pilot",
+      "family": "classic",
+      "batch_size": 32,
+      "train_flops": 10000000000000000,
+      "expected_updates": 1011,
+      "expected_completed_flops": 10004456301133824,
+      "budget_overshoot": 4456301133824,
+      "config_sha256": "2dfbb5af4e3d6f92b2b48a99c282b03fc82eb9c7ae9f2b29491236af69772fc1",
+      "estimate": {
+        "policy": "algorithmic_matmul_conv_v2",
+        "forward": 3298534883328,
+        "backward": 6597069766656,
+        "total": 9895604649984,
+        "breakdown": {
+          "attention.qkv": {
+            "forward": 695784701952,
+            "backward": 1391569403904
+          },
+          "attention.output": {
+            "forward": 231928233984,
+            "backward": 463856467968
+          },
+          "attention.qk": {
+            "forward": 154618822656,
+            "backward": 309237645312
+          },
+          "attention.av": {
+            "forward": 154618822656,
+            "backward": 309237645312
+          },
+          "mlp.expand": {
+            "forward": 927712935936,
+            "backward": 1855425871872
+          },
+          "mlp.contract": {
+            "forward": 927712935936,
+            "backward": 1855425871872
+          },
+          "lm_head": {
+            "forward": 206158430208,
+            "backward": 412316860416
+          }
+        },
+        "metadata": {
+          "schema_version": 1,
+          "shape": {
+            "batch_size": 32,
+            "sequence_length": 512,
+            "hidden_size": 768,
+            "num_heads": 12,
+            "num_layers": 12,
+            "vocab_size": 8192
+          },
+          "attention": "classic",
+          "architecture": "repository_gpt2_v1",
+          "included": [
+            "dense_matmul"
+          ],
+          "mac_flops": 2,
+          "causal_convention": "dense_square",
+          "padding_convention": "logical_tokens_no_kernel_padding",
+          "recompute": "none",
+          "excluded": [
+            "optimizer",
+            "non_contraction_elementwise",
+            "non_contraction_reductions",
+            "embedding_gather_scatter",
+            "loss",
+            "validation",
+            "kernel_padding",
+            "hardware_instructions"
+          ]
+        }
+      }
+    },
+    {
+      "path": "smoke/classic/batch_32/seed_42.yaml",
+      "stage": "smoke",
+      "family": "classic",
+      "batch_size": 32,
+      "train_flops": 9895604649984,
+      "expected_updates": 1,
+      "expected_completed_flops": 9895604649984,
+      "budget_overshoot": 0,
+      "config_sha256": "54d0087a3177587e12d4419b4748bcbf32f5165322cc51c10be1a02862f14dd4",
+      "estimate": {
+        "policy": "algorithmic_matmul_conv_v2",
+        "forward": 3298534883328,
+        "backward": 6597069766656,
+        "total": 9895604649984,
+        "breakdown": {
+          "attention.qkv": {
+            "forward": 695784701952,
+            "backward": 1391569403904
+          },
+          "attention.output": {
+            "forward": 231928233984,
+            "backward": 463856467968
+          },
+          "attention.qk": {
+            "forward": 154618822656,
+            "backward": 309237645312
+          },
+          "attention.av": {
+            "forward": 154618822656,
+            "backward": 309237645312
+          },
+          "mlp.expand": {
+            "forward": 927712935936,
+            "backward": 1855425871872
+          },
+          "mlp.contract": {
+            "forward": 927712935936,
+            "backward": 1855425871872
+          },
+          "lm_head": {
+            "forward": 206158430208,
+            "backward": 412316860416
+          }
+        },
+        "metadata": {
+          "schema_version": 1,
+          "shape": {
+            "batch_size": 32,
+            "sequence_length": 512,
+            "hidden_size": 768,
+            "num_heads": 12,
+            "num_layers": 12,
+            "vocab_size": 8192
+          },
+          "attention": "classic",
+          "architecture": "repository_gpt2_v1",
+          "included": [
+            "dense_matmul"
+          ],
+          "mac_flops": 2,
+          "causal_convention": "dense_square",
+          "padding_convention": "logical_tokens_no_kernel_padding",
+          "recompute": "none",
+          "excluded": [
+            "optimizer",
+            "non_contraction_elementwise",
+            "non_contraction_reductions",
+            "embedding_gather_scatter",
+            "loss",
+            "validation",
+            "kernel_padding",
+            "hardware_instructions"
+          ]
+        }
+      }
+    },
+    {
+      "path": "burnin/classic/batch_32/seed_42.yaml",
+      "stage": "burnin",
+      "family": "classic",
+      "batch_size": 32,
+      "train_flops": 316659348799488,
+      "expected_updates": 32,
+      "expected_completed_flops": 316659348799488,
+      "budget_overshoot": 0,
+      "config_sha256": "44b9a6e7b28c54a73f234763058712073bc5bbf84b70da18252da9ed634bfabc",
+      "estimate": {
+        "policy": "algorithmic_matmul_conv_v2",
+        "forward": 3298534883328,
+        "backward": 6597069766656,
+        "total": 9895604649984,
+        "breakdown": {
+          "attention.qkv": {
+            "forward": 695784701952,
+            "backward": 1391569403904
+          },
+          "attention.output": {
+            "forward": 231928233984,
+            "backward": 463856467968
+          },
+          "attention.qk": {
+            "forward": 154618822656,
+            "backward": 309237645312
+          },
+          "attention.av": {
+            "forward": 154618822656,
+            "backward": 309237645312
+          },
+          "mlp.expand": {
+            "forward": 927712935936,
+            "backward": 1855425871872
+          },
+          "mlp.contract": {
+            "forward": 927712935936,
+            "backward": 1855425871872
+          },
+          "lm_head": {
+            "forward": 206158430208,
+            "backward": 412316860416
+          }
+        },
+        "metadata": {
+          "schema_version": 1,
+          "shape": {
+            "batch_size": 32,
+            "sequence_length": 512,
+            "hidden_size": 768,
+            "num_heads": 12,
+            "num_layers": 12,
+            "vocab_size": 8192
+          },
+          "attention": "classic",
+          "architecture": "repository_gpt2_v1",
+          "included": [
+            "dense_matmul"
+          ],
+          "mac_flops": 2,
+          "causal_convention": "dense_square",
+          "padding_convention": "logical_tokens_no_kernel_padding",
+          "recompute": "none",
+          "excluded": [
+            "optimizer",
+            "non_contraction_elementwise",
+            "non_contraction_reductions",
+            "embedding_gather_scatter",
+            "loss",
+            "validation",
+            "kernel_padding",
+            "hardware_instructions"
+          ]
+        }
+      }
+    },
+    {
+      "path": "deltanet/batch_8/seed_42.yaml",
+      "stage": "pilot",
+      "family": "deltanet",
+      "batch_size": 8,
+      "train_flops": 10000000000000000,
+      "expected_updates": 4168,
+      "expected_completed_flops": 10001424020668416,
+      "budget_overshoot": 1424020668416,
+      "config_sha256": "633baf3ac172928e9de7f93eeaede5a58afbc49918c073e7402816df54d398b9",
+      "estimate": {
+        "policy": "algorithmic_matmul_conv_v2",
+        "forward": 789263155200,
+        "backward": 1610310746112,
+        "total": 2399573901312,
+        "breakdown": {
+          "attention.q_projection": {
+            "forward": 57982058496,
+            "backward": 115964116992
+          },
+          "attention.k_projection": {
+            "forward": 57982058496,
+            "backward": 115964116992
+          },
+          "attention.v_projection": {
+            "forward": 57982058496,
+            "backward": 115964116992
+          },
+          "attention.output_projection": {
+            "forward": 57982058496,
+            "backward": 115964116992
+          },
+          "attention.beta_projection": {
+            "forward": 905969664,
+            "backward": 1811939328
+          },
+          "attention.short_convolution": {
+            "forward": 905969664,
+            "backward": 2717908992
+          },
+          "attention.qk_l2norm": {
+            "forward": 0,
+            "backward": 0
+          },
+          "attention.output_rmsnorm": {
+            "forward": 0,
+            "backward": 0
+          },
+          "attention.chunk_gram": {
+            "forward": 4831838208,
+            "backward": 0
+          },
+          "attention.chunk_inverse": {
+            "forward": 1472200704,
+            "backward": 0
+          },
+          "attention.chunk_wy": {
+            "forward": 9663676416,
+            "backward": 0
+          },
+          "attention.chunk_state": {
+            "forward": 9663676416,
+            "backward": 0
+          },
+          "attention.chunk_output": {
+            "forward": 14495514624,
+            "backward": 0
+          },
+          "attention.chunk_recompute_wy": {
+            "forward": 0,
+            "backward": 9663676416
+          },
+          "attention.chunk_recompute_state": {
+            "forward": 0,
+            "backward": 9663676416
+          },
+          "attention.chunk_local_dv": {
+            "forward": 0,
+            "backward": 9663676416
+          },
+          "attention.chunk_reverse_state": {
+            "forward": 0,
+            "backward": 14495514624
+          },
+          "attention.chunk_qkw_grad": {
+            "forward": 0,
+            "backward": 28991029248
+          },
+          "attention.chunk_wy_grad": {
+            "forward": 0,
+            "backward": 38654705664
+          },
+          "mlp.expand": {
+            "forward": 231928233984,
+            "backward": 463856467968
+          },
+          "mlp.contract": {
+            "forward": 231928233984,
+            "backward": 463856467968
+          },
+          "lm_head": {
+            "forward": 51539607552,
+            "backward": 103079215104
+          }
+        },
+        "metadata": {
+          "schema_version": 1,
+          "shape": {
+            "batch_size": 8,
+            "sequence_length": 512,
+            "hidden_size": 768,
+            "num_heads": 12,
+            "num_layers": 12,
+            "vocab_size": 8192
+          },
+          "attention": "deltanet",
+          "architecture": "repository_gpt2_v1",
+          "included": [
+            "dense_matmul",
+            "convolution",
+            "delta_core_contractions"
+          ],
+          "mac_flops": 2,
+          "causal_convention": "fla_causal_recurrence_or_chunk64",
+          "padding_convention": "logical_tokens_no_kernel_padding",
+          "recompute": "fla_default_backward_recompute",
+          "excluded": [
+            "optimizer",
+            "non_contraction_elementwise",
+            "non_contraction_reductions",
+            "embedding_gather_scatter",
+            "loss",
+            "validation",
+            "kernel_padding",
+            "hardware_instructions"
+          ]
+        }
+      }
+    },
+    {
+      "path": "deltanet/batch_32/seed_42.yaml",
+      "stage": "pilot",
+      "family": "deltanet",
+      "batch_size": 32,
+      "train_flops": 10000000000000000,
+      "expected_updates": 1042,
+      "expected_completed_flops": 10001424020668416,
+      "budget_overshoot": 1424020668416,
+      "config_sha256": "0e11aebb807d1befe1c37d0ce25771f2c7be73c49f1579f3999ae3b725410268",
+      "estimate": {
+        "policy": "algorithmic_matmul_conv_v2",
+        "forward": 3157052620800,
+        "backward": 6441242984448,
+        "total": 9598295605248,
+        "breakdown": {
+          "attention.q_projection": {
+            "forward": 231928233984,
+            "backward": 463856467968
+          },
+          "attention.k_projection": {
+            "forward": 231928233984,
+            "backward": 463856467968
+          },
+          "attention.v_projection": {
+            "forward": 231928233984,
+            "backward": 463856467968
+          },
+          "attention.output_projection": {
+            "forward": 231928233984,
+            "backward": 463856467968
+          },
+          "attention.beta_projection": {
+            "forward": 3623878656,
+            "backward": 7247757312
+          },
+          "attention.short_convolution": {
+            "forward": 3623878656,
+            "backward": 10871635968
+          },
+          "attention.qk_l2norm": {
+            "forward": 0,
+            "backward": 0
+          },
+          "attention.output_rmsnorm": {
+            "forward": 0,
+            "backward": 0
+          },
+          "attention.chunk_gram": {
+            "forward": 19327352832,
+            "backward": 0
+          },
+          "attention.chunk_inverse": {
+            "forward": 5888802816,
+            "backward": 0
+          },
+          "attention.chunk_wy": {
+            "forward": 38654705664,
+            "backward": 0
+          },
+          "attention.chunk_state": {
+            "forward": 38654705664,
+            "backward": 0
+          },
+          "attention.chunk_output": {
+            "forward": 57982058496,
+            "backward": 0
+          },
+          "attention.chunk_recompute_wy": {
+            "forward": 0,
+            "backward": 38654705664
+          },
+          "attention.chunk_recompute_state": {
+            "forward": 0,
+            "backward": 38654705664
+          },
+          "attention.chunk_local_dv": {
+            "forward": 0,
+            "backward": 38654705664
+          },
+          "attention.chunk_reverse_state": {
+            "forward": 0,
+            "backward": 57982058496
+          },
+          "attention.chunk_qkw_grad": {
+            "forward": 0,
+            "backward": 115964116992
+          },
+          "attention.chunk_wy_grad": {
+            "forward": 0,
+            "backward": 154618822656
+          },
+          "mlp.expand": {
+            "forward": 927712935936,
+            "backward": 1855425871872
+          },
+          "mlp.contract": {
+            "forward": 927712935936,
+            "backward": 1855425871872
+          },
+          "lm_head": {
+            "forward": 206158430208,
+            "backward": 412316860416
+          }
+        },
+        "metadata": {
+          "schema_version": 1,
+          "shape": {
+            "batch_size": 32,
+            "sequence_length": 512,
+            "hidden_size": 768,
+            "num_heads": 12,
+            "num_layers": 12,
+            "vocab_size": 8192
+          },
+          "attention": "deltanet",
+          "architecture": "repository_gpt2_v1",
+          "included": [
+            "dense_matmul",
+            "convolution",
+            "delta_core_contractions"
+          ],
+          "mac_flops": 2,
+          "causal_convention": "fla_causal_recurrence_or_chunk64",
+          "padding_convention": "logical_tokens_no_kernel_padding",
+          "recompute": "fla_default_backward_recompute",
+          "excluded": [
+            "optimizer",
+            "non_contraction_elementwise",
+            "non_contraction_reductions",
+            "embedding_gather_scatter",
+            "loss",
+            "validation",
+            "kernel_padding",
+            "hardware_instructions"
+          ]
+        }
+      }
+    },
+    {
+      "path": "smoke/deltanet/batch_32/seed_42.yaml",
+      "stage": "smoke",
+      "family": "deltanet",
+      "batch_size": 32,
+      "train_flops": 9598295605248,
+      "expected_updates": 1,
+      "expected_completed_flops": 9598295605248,
+      "budget_overshoot": 0,
+      "config_sha256": "225c63b54205fb11d25e1dfec93cd35a2157a3369d6051d1be513fd576f8dda5",
+      "estimate": {
+        "policy": "algorithmic_matmul_conv_v2",
+        "forward": 3157052620800,
+        "backward": 6441242984448,
+        "total": 9598295605248,
+        "breakdown": {
+          "attention.q_projection": {
+            "forward": 231928233984,
+            "backward": 463856467968
+          },
+          "attention.k_projection": {
+            "forward": 231928233984,
+            "backward": 463856467968
+          },
+          "attention.v_projection": {
+            "forward": 231928233984,
+            "backward": 463856467968
+          },
+          "attention.output_projection": {
+            "forward": 231928233984,
+            "backward": 463856467968
+          },
+          "attention.beta_projection": {
+            "forward": 3623878656,
+            "backward": 7247757312
+          },
+          "attention.short_convolution": {
+            "forward": 3623878656,
+            "backward": 10871635968
+          },
+          "attention.qk_l2norm": {
+            "forward": 0,
+            "backward": 0
+          },
+          "attention.output_rmsnorm": {
+            "forward": 0,
+            "backward": 0
+          },
+          "attention.chunk_gram": {
+            "forward": 19327352832,
+            "backward": 0
+          },
+          "attention.chunk_inverse": {
+            "forward": 5888802816,
+            "backward": 0
+          },
+          "attention.chunk_wy": {
+            "forward": 38654705664,
+            "backward": 0
+          },
+          "attention.chunk_state": {
+            "forward": 38654705664,
+            "backward": 0
+          },
+          "attention.chunk_output": {
+            "forward": 57982058496,
+            "backward": 0
+          },
+          "attention.chunk_recompute_wy": {
+            "forward": 0,
+            "backward": 38654705664
+          },
+          "attention.chunk_recompute_state": {
+            "forward": 0,
+            "backward": 38654705664
+          },
+          "attention.chunk_local_dv": {
+            "forward": 0,
+            "backward": 38654705664
+          },
+          "attention.chunk_reverse_state": {
+            "forward": 0,
+            "backward": 57982058496
+          },
+          "attention.chunk_qkw_grad": {
+            "forward": 0,
+            "backward": 115964116992
+          },
+          "attention.chunk_wy_grad": {
+            "forward": 0,
+            "backward": 154618822656
+          },
+          "mlp.expand": {
+            "forward": 927712935936,
+            "backward": 1855425871872
+          },
+          "mlp.contract": {
+            "forward": 927712935936,
+            "backward": 1855425871872
+          },
+          "lm_head": {
+            "forward": 206158430208,
+            "backward": 412316860416
+          }
+        },
+        "metadata": {
+          "schema_version": 1,
+          "shape": {
+            "batch_size": 32,
+            "sequence_length": 512,
+            "hidden_size": 768,
+            "num_heads": 12,
+            "num_layers": 12,
+            "vocab_size": 8192
+          },
+          "attention": "deltanet",
+          "architecture": "repository_gpt2_v1",
+          "included": [
+            "dense_matmul",
+            "convolution",
+            "delta_core_contractions"
+          ],
+          "mac_flops": 2,
+          "causal_convention": "fla_causal_recurrence_or_chunk64",
+          "padding_convention": "logical_tokens_no_kernel_padding",
+          "recompute": "fla_default_backward_recompute",
+          "excluded": [
+            "optimizer",
+            "non_contraction_elementwise",
+            "non_contraction_reductions",
+            "embedding_gather_scatter",
+            "loss",
+            "validation",
+            "kernel_padding",
+            "hardware_instructions"
+          ]
+        }
+      }
+    },
+    {
+      "path": "burnin/deltanet/batch_32/seed_42.yaml",
+      "stage": "burnin",
+      "family": "deltanet",
+      "batch_size": 32,
+      "train_flops": 307145459367936,
+      "expected_updates": 32,
+      "expected_completed_flops": 307145459367936,
+      "budget_overshoot": 0,
+      "config_sha256": "29d031d3cb16c04a130fbdd3559454ec8ea5976e53906c758e30d53c84e6aa9e",
+      "estimate": {
+        "policy": "algorithmic_matmul_conv_v2",
+        "forward": 3157052620800,
+        "backward": 6441242984448,
+        "total": 9598295605248,
+        "breakdown": {
+          "attention.q_projection": {
+            "forward": 231928233984,
+            "backward": 463856467968
+          },
+          "attention.k_projection": {
+            "forward": 231928233984,
+            "backward": 463856467968
+          },
+          "attention.v_projection": {
+            "forward": 231928233984,
+            "backward": 463856467968
+          },
+          "attention.output_projection": {
+            "forward": 231928233984,
+            "backward": 463856467968
+          },
+          "attention.beta_projection": {
+            "forward": 3623878656,
+            "backward": 7247757312
+          },
+          "attention.short_convolution": {
+            "forward": 3623878656,
+            "backward": 10871635968
+          },
+          "attention.qk_l2norm": {
+            "forward": 0,
+            "backward": 0
+          },
+          "attention.output_rmsnorm": {
+            "forward": 0,
+            "backward": 0
+          },
+          "attention.chunk_gram": {
+            "forward": 19327352832,
+            "backward": 0
+          },
+          "attention.chunk_inverse": {
+            "forward": 5888802816,
+            "backward": 0
+          },
+          "attention.chunk_wy": {
+            "forward": 38654705664,
+            "backward": 0
+          },
+          "attention.chunk_state": {
+            "forward": 38654705664,
+            "backward": 0
+          },
+          "attention.chunk_output": {
+            "forward": 57982058496,
+            "backward": 0
+          },
+          "attention.chunk_recompute_wy": {
+            "forward": 0,
+            "backward": 38654705664
+          },
+          "attention.chunk_recompute_state": {
+            "forward": 0,
+            "backward": 38654705664
+          },
+          "attention.chunk_local_dv": {
+            "forward": 0,
+            "backward": 38654705664
+          },
+          "attention.chunk_reverse_state": {
+            "forward": 0,
+            "backward": 57982058496
+          },
+          "attention.chunk_qkw_grad": {
+            "forward": 0,
+            "backward": 115964116992
+          },
+          "attention.chunk_wy_grad": {
+            "forward": 0,
+            "backward": 154618822656
+          },
+          "mlp.expand": {
+            "forward": 927712935936,
+            "backward": 1855425871872
+          },
+          "mlp.contract": {
+            "forward": 927712935936,
+            "backward": 1855425871872
+          },
+          "lm_head": {
+            "forward": 206158430208,
+            "backward": 412316860416
+          }
+        },
+        "metadata": {
+          "schema_version": 1,
+          "shape": {
+            "batch_size": 32,
+            "sequence_length": 512,
+            "hidden_size": 768,
+            "num_heads": 12,
+            "num_layers": 12,
+            "vocab_size": 8192
+          },
+          "attention": "deltanet",
+          "architecture": "repository_gpt2_v1",
+          "included": [
+            "dense_matmul",
+            "convolution",
+            "delta_core_contractions"
+          ],
+          "mac_flops": 2,
+          "causal_convention": "fla_causal_recurrence_or_chunk64",
+          "padding_convention": "logical_tokens_no_kernel_padding",
+          "recompute": "fla_default_backward_recompute",
+          "excluded": [
+            "optimizer",
+            "non_contraction_elementwise",
+            "non_contraction_reductions",
+            "embedding_gather_scatter",
+            "loss",
+            "validation",
+            "kernel_padding",
+            "hardware_instructions"
+          ]
+        }
+      }
+    }
+  ],
+  "status": "prepared_only_not_staged_or_launched",
+  "hardware_fit": "not_tested"
+}
