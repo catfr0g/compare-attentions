@@ -68,6 +68,11 @@ def canonical(value):
 
 
 def digest(path):
+    from unified_normal_live import held_digest
+
+    authenticated = held_digest(path)
+    if authenticated is not None:
+        return authenticated
     with Path(path).open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
@@ -171,7 +176,7 @@ def held_inputs(candidate, locked):
 @contextlib.contextmanager
 def request_lease(candidate):
     """Only fallback acquisition hashes bytes; LIVE reuses held immutable inputs."""
-    from seed202_pilot.prepared_files import lease
+    from unified_normal_live import retained_lease as lease
 
     selected = _HELD_INPUTS.get(str(Path(candidate).resolve()))
     if selected is not None:
@@ -197,6 +202,12 @@ def verify_files(value, locked=None):
             == pin["sha256"],
             "UNIFIED_INPUT_DRIFT",
         )
+    # Match Path.is_relative_to's lexical, platform-normalized components without
+    # rebuilding every ancestor sequence for every root/row. All byte, native
+    # path and actual directory-closure checks above/below still run each time.
+    file_parts = {
+        name: tuple(os.path.normcase(part) for part in Path(name).parts) for name in value["files"]
+    }
     for name in value["roots"]:
         root = safe_root(Path(name))
         actual = set()
@@ -204,7 +215,8 @@ def verify_files(value, locked=None):
             require(not path.is_symlink() and not path.is_junction(), "UNIFIED_INPUT_LINK")
             if path.is_file():
                 actual.add(str(path.resolve()))
-        expected = {n for n in value["files"] if Path(n).is_relative_to(root)}
+        root_parts = tuple(os.path.normcase(part) for part in root.parts)
+        expected = {n for n, parts in file_parts.items() if parts[: len(root_parts)] == root_parts}
         require(actual == expected, "UNIFIED_IMPORT_ROOT_CLOSURE")
 
 

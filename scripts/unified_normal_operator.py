@@ -112,6 +112,28 @@ def integrate(source):
         "    from unified_normal_contract import descriptor, verify_files",
         "    from unified_normal_contract import descriptor",
     )
+    replace(
+        source / "qualified_imports.py",
+        "    from seed202_pilot.prepared_files import check, lease",
+        "    from seed202_pilot.prepared_files import check\n"
+        "    from unified_normal_live import retained_lease as lease",
+    )
+    replace(
+        source / "preparation.py",
+        "from seed202_pilot.prepared_files import check, lease, safe_path, safe_root",
+        "from seed202_pilot.prepared_files import check, safe_path, safe_root\n"
+        "from unified_normal_live import retained_lease as lease",
+    )
+    replace(
+        source / "storage.py",
+        'def digest(path: Path) -> str:\n    with Path(path).open("rb") as stream:',
+        "def digest(path: Path) -> str:\n"
+        "    from unified_normal_live import held_digest\n\n"
+        "    authenticated = held_digest(path)\n"
+        "    if authenticated is not None:\n"
+        "        return authenticated\n"
+        '    with Path(path).open("rb") as stream:',
+    )
     path = source / "host_operator.py"
     text = path.read_text(encoding="utf-8")
     start = text.index('    if args.command == "services":', text.index("def _execute("))
@@ -260,6 +282,7 @@ def build(inputs, normal_archive, destination):
     host = payload / "source/src"
     for name in (
         "unified_normal_contract",
+        "unified_normal_live",
         "unified_normal_replay",
         "unified_normal_source",
         "unified_normal_task",
@@ -280,6 +303,7 @@ def build(inputs, normal_archive, destination):
                 "host_services",
                 "audited_publish",
                 "preparation",
+                "storage",
                 "cli",
                 "qualified_imports",
                 "qualified_bridge",
@@ -362,6 +386,7 @@ def build(inputs, normal_archive, destination):
     maintained = [
         *repository.joinpath("scripts").glob("unified_normal_*.py"),
         repository / "scripts/build_unified_normal_contract.py",
+        repository / "docs/unified-normal-live-window.md",
         *repository.joinpath("tests/scripts").glob("*unified_normal*.py"),
     ]
     for original in maintained:
