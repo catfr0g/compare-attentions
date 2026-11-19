@@ -1,7 +1,9 @@
 """Failure-boundary probes exercised inside a real torchrun group."""
 
+import ast
 import copy
 import json
+import re
 from functools import partial
 
 import torch
@@ -10,7 +12,37 @@ from compare_attention.train import loop
 from compare_attention.train.backup import BackupTracker
 from compare_attention.train.checkpoint import _digest, load_checkpoint
 from compare_attention.train.distributed import distributed_run
+from compare_attention.train.lifecycle import primary_failure
 from compare_attention.train.tracker import DisabledTracker, GroupTracker
+
+
+def assert_phase_failure(error, phase, exception_class, basename, function, raw_message):
+    """Require the real sanitized collective envelope, not an arbitrary RuntimeError."""
+    assert type(error) is RuntimeError
+    message = str(error)
+    prefix = "DDP phase failed: "
+    assert message.startswith(prefix)
+    assert raw_message not in message
+    rows = ast.literal_eval(message[len(prefix) :])
+    assert isinstance(rows, list) and len(rows) == 2
+    reports = [row for row in rows if row is not None]
+    assert reports
+    for report in reports:
+        assert set(report) == {"schema", "phase", "exception_class", "frames"}
+        assert report["schema"] == "training-lifecycle-failure-v1"
+        assert report["phase"] == phase
+        assert report["exception_class"] == exception_class
+        assert isinstance(report["frames"], list) and report["frames"]
+        for frame in report["frames"]:
+            assert set(frame) == {"basename", "function", "line"}
+            assert re.fullmatch(r"[A-Za-z_0-9.-]+\.py", frame["basename"])
+            assert re.fullmatch(r"[A-Za-z_][A-Za-z_0-9.<>]*", frame["function"])
+            assert type(frame["line"]) is int and frame["line"] > 0
+        origin = report["frames"][-1]
+        assert (origin["basename"], origin["function"]) == (basename, function)
+    failure = primary_failure(error, "training")
+    assert failure == reports[0]
+    return failure
 
 
 class MustNotStart(DisabledTracker):
@@ -67,7 +99,17 @@ def failures(root, config, mode):
                     "writer": "writer failure",
                     "load": "rank-local load failure",
                 }[mode]
-                assert expected in message, message
+                if mode in {"writer", "load"}:
+                    assert_phase_failure(
+                        error,
+                        "log_loss" if mode == "writer" else "load_train",
+                        "RuntimeError" if mode == "writer" else "ValueError",
+                        "ddp_guards.py",
+                        "log_loss" if mode == "writer" else "load",
+                        expected,
+                    )
+                else:
+                    assert expected in message, message
                 assert len(set(run.gather(message))) == 1
             else:
                 raise AssertionError("failed rank was accepted")
@@ -107,7 +149,21 @@ def resume_guards(root, config):
                     "missing": "missing ranks",
                     "rng": "RNG",
                 }[case]
-                assert expected in message, message
+                basename, function = {
+                    "used": ("backup.py", "validate_resume_destination"),
+                    "terminal": ("distributed_checkpoint.py", "preflight"),
+                    "topology": ("distributed_checkpoint.py", "validate"),
+                    "missing": ("distributed_checkpoint.py", "validate"),
+                    "rng": ("checkpoint.py", "_validate_rng"),
+                }[case]
+                assert_phase_failure(
+                    error,
+                    "resume_destination" if case == "used" else "resume_preflight",
+                    "ValueError",
+                    basename,
+                    function,
+                    expected,
+                )
                 assert len(set(run.gather(message))) == 1
             else:
                 raise AssertionError("invalid checkpoint/sink was accepted")
@@ -136,7 +192,15 @@ def stopping(root, config, mode):
                         resume_from=root / "stopped/checkpoints/latest.json",
                     )
                 except RuntimeError as error:
-                    assert "terminal early-stopped" in str(error)
+                    assert_phase_failure(
+                        error,
+                        "resume_preflight",
+                        "ValueError",
+                        "distributed_checkpoint.py",
+                        "preflight",
+                        "terminal early-stopped",
+                    )
+                    assert len(set(run.gather(str(error)))) == 1
                 else:
                     raise AssertionError("early-stopped checkpoint resumed")
     finally:

@@ -157,6 +157,16 @@ class GroupTracker:
         for sink in sinks:
             sink(payload, step, keep_last)
 
+    def record_failure(self, report: dict[str, object]) -> None:
+        """Attempt every sink even if one diagnostic destination is unavailable."""
+        for tracker in self._trackers:
+            try:
+                sink = getattr(tracker, "record_failure", None)
+                if callable(sink):
+                    sink(report)
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass
+
     def record_identity(self, identity: dict[str, object]) -> None:
         """Forward optional provenance events without requiring legacy trackers to change."""
         for tracker in self._trackers:

@@ -43,10 +43,13 @@ def local_call(function, phase):
 def run_training(config, tracker, resume_from, enabled, runner):
     """Operational wrapper, never an independent training implementation."""
     from compare_attention.train.distributed_checkpoint import preflight
+    from compare_attention.train.lifecycle import observe_failures
     from compare_attention.train.tracker import DisabledTracker, validate_resume_destination
 
     with distributed_run(enabled) as run:
         mirror = tracker if tracker is not None else DisabledTracker()
+        if run is None and resume_from is not None:
+            validate_resume_destination(mirror)
         if run is not None:
             run.call(lambda: run.batch(config.schedule.batch_size), phase="global_batch")
             contracts = run.gather((config.model_dump(mode="json"), str(resume_from)))
@@ -58,7 +61,8 @@ def run_training(config, tracker, resume_from, enabled, runner):
                 run.call(lambda: validate_resume_destination(mirror), phase="resume_destination")
                 run.call(lambda: preflight(resume_from, config), phase="resume_preflight")
             mirror = PrimaryTracker(mirror, run)
-        return runner(config, mirror, resume_from=resume_from)
+        with observe_failures(tracker, rank=(run.rank if run else None)):
+            return runner(config, mirror, resume_from=resume_from)
 
 
 class DistributedRun:
@@ -77,12 +81,17 @@ class DistributedRun:
 
     def call(self, function: Callable[[], Any], *, primary=False, phase=None) -> Any:
         """Exchange phase failures before any peer enters its next collective."""
+        from compare_attention.train.lifecycle import failure_phase, primary_failure
+
         value, failure = None, None
         try:
             if not primary or self.rank == 0:
-                value = function()
+                with failure_phase(phase or function.__name__):
+                    value = function()
         except Exception as error:  # pylint: disable=broad-exception-caught
-            failure = f"{type(error).__name__}: {error}"
+            # Rank coordination is also a console boundary. Never transmit text
+            # or chained exceptions: SDK errors can contain credentials and URLs.
+            failure = primary_failure(error, phase or function.__name__)
         name = phase or function.__name__
         phase_id = _HOT_PHASE_IDS.get(name, 0)
         header = torch.tensor(
@@ -99,7 +108,9 @@ class DistributedRun:
             raise RuntimeError(f"DDP phase order mismatch: {[row[0] for row in rows]}")
         failures = [row[1] for row in rows]
         if any(failures):
-            raise RuntimeError(f"DDP phase failed: {failures}")
+            error = RuntimeError(f"DDP phase failed: {failures}")
+            error._training_primary_failure = next(row for row in failures if row)  # pylint: disable=protected-access
+            raise error from None
         return value
 
     def validation_observation(self, quality: Quality) -> Quality:

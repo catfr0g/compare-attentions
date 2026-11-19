@@ -132,4 +132,7 @@ def record_identity(tracker: object, identity: dict[str, object]) -> None:
     """Optional tracker event preserves existing third-party tracker interfaces."""
     recorder = getattr(tracker, "record_identity", None)
     if recorder is not None:
-        recorder(identity)
+        from compare_attention.train.lifecycle import failure_phase
+
+        with failure_phase("identity_write"):
+            recorder(identity)

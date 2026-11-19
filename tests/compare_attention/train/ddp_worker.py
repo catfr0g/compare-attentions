@@ -17,6 +17,7 @@ import torch
 from compare_attention.train.backup import BackupTracker
 from compare_attention.train.config import TrainConfig
 from compare_attention.train.distributed import distributed_run
+from compare_attention.train.lifecycle import primary_failure
 from compare_attention.train.loop import train
 from compare_attention.train.precision import Precision
 
@@ -89,7 +90,15 @@ def resume_proof(root, config, rank):
                 resume_from=root / "partial/checkpoints/latest.json" if name == "resumed" else None,
             )
         except RuntimeError as error:
-            assert name == "partial" and "intentional durable interruption" in str(error)
+            assert name == "partial"
+            failure = primary_failure(error, "training")
+            assert failure["phase"] == "save_checkpoint"
+            assert failure["exception_class"] == "RuntimeError"
+            assert any(
+                frame["basename"] == "ddp_worker.py" and frame["function"] == "save_checkpoint"
+                for frame in failure["frames"]
+            )
+            assert "intentional durable interruption" not in str(error)
         else:
             assert name != "partial"
             torch.save(draws(), root / f"{name}-next-{rank}.pt")

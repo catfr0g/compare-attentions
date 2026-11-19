@@ -75,6 +75,20 @@ class BackupTracker:
         """Готовим каталог результата."""
         self._result_dir.mkdir(parents=True, exist_ok=True)
 
+    def record_scalar_readback(self, value: dict[str, object]) -> None:
+        """Retain the complete unsampled scalar/page response before validation."""
+        _atomic_json(self._result_dir / "training-unsampled-readback.json", value)
+
+    def record_failure(self, report: dict[str, object]) -> None:
+        """Flush/fsync safe original facts independently of final identity writes."""
+        rank = report.get("rank")
+        if rank is not None:
+            if type(rank) is not int or rank < 0:
+                raise ValueError("invalid diagnostic rank")
+            _atomic_json(self._result_dir / f"lifecycle-failure-rank-{rank}.json", report)
+        if rank is None or rank == 0:
+            _atomic_json(self._result_dir / "lifecycle-failure.json", report)
+
     def record_identity(self, identity: dict[str, object]) -> None:
         """Persist initialization immediately; completion replaces this atomically."""
         target = self._result_dir / "run_identity.json"

@@ -15,6 +15,7 @@ from compare_attention.train import loop
 from compare_attention.train.backup import BackupTracker
 from compare_attention.train.config import TrainConfig
 from compare_attention.train.distributed import distributed_run
+from tests.compare_attention.train.ddp_guards import assert_phase_failure
 from tests.compare_attention.train.ddp_worker import resume_proof
 from tests.compare_attention.train.test_validation_observation import V5_LOSSES
 
@@ -61,7 +62,15 @@ def main():
                 "validation_failure": "rank one validation failed",
                 "writer_failure": "validation writer failed",
             }
-            assert mode in expected and expected[mode] in str(error)
+            assert mode in expected
+            assert_phase_failure(
+                error,
+                "validation" if mode == "validation_failure" else "log_validation",
+                "ValueError",
+                "ddp_validation_worker.py",
+                "quality" if mode == "validation_failure" else "log_validation",
+                expected[mode],
+            )
             assert not dist.is_initialized()
             (root / f"failure-{rank}.txt").write_text(str(error))
         else:

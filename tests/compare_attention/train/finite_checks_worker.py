@@ -19,6 +19,7 @@ from compare_attention.train.checkpoint import load_checkpoint
 from compare_attention.train.config import TrainConfig
 from compare_attention.train.distributed import distributed_run
 from tests.compare_attention.train import finite_reference
+from tests.compare_attention.train.ddp_guards import assert_phase_failure
 from tests.compare_attention.train.ddp_worker import (
     CpuScalerPrecision,
     InterruptedBackup,
@@ -60,7 +61,15 @@ def trajectories(root, config, rank):
                 resume_from=root / "partial/checkpoints/latest.json" if name == "resumed" else None,
             )
         except RuntimeError as error:
-            assert name == "partial" and "intentional durable interruption" in str(error)
+            assert name == "partial"
+            assert_phase_failure(
+                error,
+                "save_checkpoint",
+                "RuntimeError",
+                "ddp_worker.py",
+                "save_checkpoint",
+                "intentional durable interruption",
+            )
         else:
             assert name != "partial"
             assert result.steps == 7
@@ -147,15 +156,37 @@ def failures(root, config, run):
                     loop.train(case_config, BackupTracker(path), distributed=True)
                 except RuntimeError as error:
                     message = str(error)
-                    assert "nonfinite" in message
+                    contract = message
+                    if name == "scaled-gradient":
+                        failure = assert_phase_failure(
+                            error,
+                            "scaled_optimizer_step",
+                            "RuntimeError",
+                            "distributed.py",
+                            "require",
+                            "nonfinite scaled gradients; optimizer update aborted",
+                        )
+                        policy_file = "finite_reference.py" if baseline else "precision.py"
+                        assert any(
+                            frame["basename"] == policy_file
+                            and frame["function"] == "backward_step"
+                            for frame in failure["frames"]
+                        )
+                        # Distinct implementations have distinct traceback frames. Compare
+                        # the exact public failure identity, after checking each origin.
+                        contract = {
+                            key: failure[key] for key in ("schema", "phase", "exception_class")
+                        }
+                    else:
+                        assert "nonfinite" in message
                     assert len(set(run.gather(message))) == 1
+                    policy_rows.append(contract)
                 else:
                     raise AssertionError("nonfinite rank accepted")
                 assert updates == 0
                 assert policy.optimizer_steps == policy.skipped_optimizer_steps == 0
                 assert policy.scaler.get_scale() == 128.0
                 assert not (path / "metrics.jsonl").exists()
-                policy_rows.append(message)
                 loop.GPT2, loop._loss = original_model, original_loss
             assert policy_rows[0] == policy_rows[1]
             proofs.append({"mode": name, "optimizer_steps": updates, "error": policy_rows[1]})

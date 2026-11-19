@@ -33,6 +33,7 @@ from compare_attention.train.identity import (
     parameter_fingerprint,
     record_identity,
 )
+from compare_attention.train.lifecycle import failure_phase
 from compare_attention.train.lr_schedule import log_learning_rate, next_learning_rate
 from compare_attention.train.precision import Precision, autocast, current_precision
 from compare_attention.train.result import Quality, Speed, TrainResult
@@ -117,6 +118,7 @@ def _train(
         with (
             torch._dynamo.config.patch(suppress_errors=False),  # pylint: disable=protected-access,no-member
             precision.activate() if precision is not None else nullcontext(),
+            failure_phase("training"),
         ):
             result = _run(
                 config, compiled, moved, device, mirror, step_cost.total, identity, resume_from
@@ -126,10 +128,13 @@ def _train(
             ):
                 raise RuntimeError("CUDA AMP optimizer update count does not match completed steps")
     except Exception as error:
-        identity.update(status="failed", failure=str(error))
+        identity.update(status="failed", failure=type(error).__name__)
         if precision is not None:
             identity["precision"] = precision.metadata()
-        record_identity(mirror, identity)
+        try:
+            record_identity(mirror, identity)
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass  # Never replace the primary failure with diagnostic I/O.
         raise
     if precision is not None:
         identity["precision"] = precision.metadata()
@@ -147,8 +152,10 @@ def _train(
     if current() is not None:
         finalize_evidence(identity)
     result = result.model_copy(update={"provenance": identity.copy()})
-    mirror.finish(result, model)
-    record_identity(mirror, identity)
+    with failure_phase("finish"):
+        mirror.finish(result, model)
+    with failure_phase("identity_write"):
+        record_identity(mirror, identity)
     logger.info("%s", result)
     return result
 
