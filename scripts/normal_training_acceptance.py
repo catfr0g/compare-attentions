@@ -3,6 +3,7 @@
 import hashlib
 import json
 import zipfile
+from itertools import groupby
 from pathlib import Path
 
 from normal_training_native import verify_native
@@ -111,6 +112,18 @@ def verify_native_service(root, raw):
     require(sorted(actual) == sorted(expected), "NORMAL_NATIVE_SERVICE_VALUES")
 
 
+def _event_comparison(events):
+    """Ignore only order within contiguous equal-iteration groups, never raw evidence.
+
+    The SDK requests ascending events without a tie-breaker. Keep group order,
+    every full row (including timestamps/resources), and duplicate multiplicity.
+    This is a comparison view, not a replacement for unsampled validation.
+    """
+    return [
+        (axis, sorted(rows, key=canonical)) for axis, rows in groupby(events, lambda r: r["iter"])
+    ]
+
+
 def training_readback(root, case, values):
     """Independent SDK reads; do not count monitors as scientific events or discard them."""
     from quality_inherit import leaf
@@ -156,12 +169,17 @@ def training_readback(root, case, values):
     require(
         "parameters" in fresh
         and fresh["parameters"] == raw["parameters"]
-        and fresh["events"] == raw["events"]
+        and _event_comparison(fresh["events"]) == _event_comparison(raw["events"])
         and receipt == expected,
         "NORMAL_FRESH_UNSAMPLED_DRIFT",
     )
     verify_native_service(root, fresh)
     return {"receipt": receipt, "raw": fresh, "fresh_sdk_readback": True}
+
+
+def _training_comparison(value):
+    """Change only raw.events in a shallow comparison view; all metadata stays exact."""
+    return {**value, "raw": {**value["raw"], "events": _event_comparison(value["raw"]["events"])}}
 
 
 def accept(package, root, case, values):
@@ -176,7 +194,8 @@ def accept(package, root, case, values):
     )
     training = training_readback(root, case, values)
     require(
-        training == json.loads((root / "training-fresh-readback.json").read_bytes()),
+        _training_comparison(training)
+        == _training_comparison(json.loads((root / "training-fresh-readback.json").read_bytes())),
         "NORMAL_HOST_SERVICE_DRIFT",
     )
     publication = json.loads((root.parent / (root.name + "-publication.json")).read_bytes())

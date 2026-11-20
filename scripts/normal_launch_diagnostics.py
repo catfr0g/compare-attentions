@@ -88,6 +88,8 @@ _NORMAL_FUNCTIONS = frozenset(
         "failure_phase",
         "record_failure",
         "verify_native",
+        "training_readback",
+        "verify_native_service",
         "validated_driver_environment",
     }
 )
@@ -115,6 +117,10 @@ _NORMAL_CODES = frozenset(
         "HARDWARE_EXACT_TWO_T4_REQUIRED",
         "HARDWARE_T4_SM75_REQUIRED",
         "NORMAL_VALIDATED_DRIVER_REQUIRED",
+        "NORMAL_RETURN_ENVELOPE",
+        "NORMAL_RETURN_RECEIPT",
+        "NORMAL_FRESH_UNSAMPLED_DRIFT",
+        "NORMAL_NATIVE_SERVICE_VALUES",
     }
 )
 _NORMAL_PRIMARY_PHASES = frozenset(
@@ -331,18 +337,12 @@ class NormalDiagnostics:
         ):
             return False
         frames = value["frames"]
-        return (
-            type(frames) is list
-            and len(frames) <= 12
-            and all(_normal_frame_valid(row) for row in frames)
-        )
+        return type(frames) is list and len(frames) <= 12 and all(map(_normal_frame_valid, frames))
 
     def path(self, stage, rank):
         if stage not in _NORMAL_STAGES or rank not in (None, 0, 1):
             raise ValueError("NORMAL_DIAGNOSTIC_SCOPE")
-        return self.root / (
-            self.phase + "-" + stage + "-" + ("parent" if rank is None else str(rank)) + ".json"
-        )
+        return self.root / f"{self.phase}-{stage}-{'parent' if rank is None else rank}.json"
 
     def persist(self, value):
         """Best effort; failure must never mask or replace the primary exception."""
