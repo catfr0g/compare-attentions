@@ -149,13 +149,26 @@ def build_package(parent_archive, repository, destination):
     _write(destination, "setup.py", launch)
     _write(
         destination,
+        "normal_driver_environment.py",
+        (repository / "scripts/normal_driver_environment.py").read_bytes(),
+    )
+    _write(
+        destination,
+        "normal_launch_diagnostics.py",
+        (repository / "scripts/normal_launch_diagnostics.py").read_bytes(),
+    )
+    _write(
+        destination,
         "worker.py",
         (
             b'"""Saved public NORMAL worker, no import-time scientific execution."""\n\n'
             b"import sys\nfrom pathlib import Path\n\n"
             b'sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))\n'
-            b"from normal_training_worker import main\n\n"
-            b'if __name__ == "__main__":\n    raise SystemExit(main())\n'
+            b"from normal_launch_diagnostics import normal_cli\n\n\n"
+            b"def entry():\n"
+            b"    from normal_training_worker import main\n\n"
+            b"    return main()\n\n\n"
+            b'if __name__ == "__main__":\n    raise SystemExit(normal_cli(entry, "pre-worker"))\n'
         ),
     )
     files = {

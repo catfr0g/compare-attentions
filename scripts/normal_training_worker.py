@@ -1,12 +1,12 @@
 """Saved NORMAL worker: public parser/train, real native callbacks, closed services."""
 
-import argparse
 import hashlib
 import json
 import os
 import sys
 from pathlib import Path
 
+from normal_launch_diagnostics import NormalArgumentParser, normal_context, normal_entry
 from normal_training_native import validate_full, verify_native
 from normal_training_plan import (
     canonical,
@@ -198,9 +198,21 @@ def finish(args, case, values):
     )
 
 
+def _execute(args, case, values):
+    if args.phase == "worker":
+        worker(args, case, values)
+    elif args.phase == "finish":
+        finish(args, case, values)
+    else:
+        from normal_training_acceptance import accept
+
+        accept(args.package, args.output, case, values)
+    return 0
+
+
 def main(argv=None):
     """No default seed/case/source, no resume mode and no automatic following run."""
-    parser = argparse.ArgumentParser(allow_abbrev=False)
+    parser = NormalArgumentParser(allow_abbrev=False)
     for name in ("package", "plan", "recipe", "data", "private", "output"):
         parser.add_argument("--" + name, type=Path, required=True)
     for name in ("case", "prefix"):
@@ -227,15 +239,10 @@ def main(argv=None):
     services = leaf("services")
     rank = int(os.environ.get("RANK", "0"))
     values = services.credentials(args.private, rank=0) if rank == 0 else None
+    if normal_context() is not None:
+        return normal_entry(lambda: _execute(args, case, values), args.phase)
     try:
-        if args.phase == "worker":
-            worker(args, case, values)
-        elif args.phase == "finish":
-            finish(args, case, values)
-        else:
-            from normal_training_acceptance import accept
-
-            accept(args.package, args.output, case, values)
+        _execute(args, case, values)
     except Exception as error:  # pylint: disable=broad-exception-caught
         from compare_attention.train.lifecycle import primary_failure
 

@@ -10,9 +10,12 @@ import uuid
 import zipfile
 from pathlib import Path, PurePosixPath
 
+from normal_driver_environment import validated_driver_environment
+from normal_launch_diagnostics import NormalArgumentParser, normal_cli
+
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(allow_abbrev=False)
+    parser = NormalArgumentParser(allow_abbrev=False)
     parser.add_argument("--uv", type=Path, required=True)
     parser.add_argument("--python", type=Path, required=True)
     parser.add_argument("--engineering-bootstrap", type=Path)
@@ -65,6 +68,10 @@ def main(argv=None):
                 raise ValueError("NORMAL_WHEEL_UNSAFE")
         saved.extractall(wheel_root)
     allowed = {
+        "NORMAL_DIAGNOSTIC_ROOT",
+        "NORMAL_DIAGNOSTIC_PHASE",
+        "NORMAL_DIAGNOSTIC_SOURCE",
+        "NORMAL_DIAGNOSTIC_CASE",
         "SYSTEMROOT",
         "WINDIR",
         "PATH",
@@ -95,8 +102,10 @@ def main(argv=None):
         "MKL_NUM_THREADS",
     }
     env = {key: value for key, value in os.environ.items() if key.upper() in allowed}
+    env.update(validated_driver_environment(root, os.environ))
     roots = [
         wheel_root,
+        root,
         root / "src",
         root / "inherited/operator",
         root / "inherited/operator/inherited",
@@ -182,4 +191,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(normal_cli(main, "setup"))

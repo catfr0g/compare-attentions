@@ -1,6 +1,5 @@
 """One target-only task evaluation between NORMAL return and final publication."""
 
-import argparse
 import hashlib
 import json
 import os
@@ -10,9 +9,11 @@ import uuid
 import zipfile
 from pathlib import Path, PurePosixPath
 
+from normal_launch_diagnostics import NormalArgumentParser, normal_cli
+
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(allow_abbrev=False)
+    parser = NormalArgumentParser(allow_abbrev=False)
     for name in ("package", "plan", "recipe", "data", "private", "output", "review", "decision"):
         parser.add_argument("--" + name, required=True, type=Path)
     parser.add_argument("--case", required=True)
@@ -109,4 +110,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(normal_cli(main, "task"))
