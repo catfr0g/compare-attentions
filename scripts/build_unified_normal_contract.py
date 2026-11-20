@@ -6,7 +6,8 @@ import shutil
 from pathlib import Path
 
 from unified_normal_contract import Policy, canonical, digest, read, require
-from unified_normal_source import PROFILE, RUNTIME_RECORD, SOURCE, WHEEL
+from unified_normal_profiles import REPAIRED, authenticate_package, selected
+from unified_normal_source import PROFILE, RUNTIME_RECORD, WHEEL
 
 
 def pin(path):
@@ -27,6 +28,13 @@ def save(path, value):
 
 def build(inputs, output):
     """Snapshot declared source/replay bytes without duplicating scientific arrays."""
+    profile_name = inputs.get("source_profile", PROFILE)
+    release = selected(profile_name)
+    additional = (
+        {"source_profile", "source_review", "generation", "normal_plan", "normal_recipe"}
+        if profile_name == REPAIRED
+        else set()
+    )
     require(
         set(inputs)
         == {
@@ -37,7 +45,8 @@ def build(inputs, output):
             "normal_package",
             "normal_case",
             "runtime_record",
-        },
+        }
+        | additional,
         "UNIFIED_BUILD_INPUTS",
     )
     output = Path(output).resolve()
@@ -46,7 +55,7 @@ def build(inputs, output):
     old_descriptor = old / "payload/qualified-launch/bridge.json"
     sorting = read(old_descriptor)
     normal = Path(inputs["normal_package"])
-    require(digest(normal / "normal-source-identity.json") == SOURCE, "UNIFIED_REVIEWED_NORMAL")
+    authenticate_package(normal, profile_name)
     runtime_path = Path(inputs["runtime_record"])
     require(digest(runtime_path) == RUNTIME_RECORD, "UNIFIED_AUTHENTIC_RUNTIME_REFERENCE")
     runtime_fields = ["completed", 0, "acceptance", "timing", "metadata", "execution_runtime"]
@@ -54,9 +63,23 @@ def build(inputs, output):
     for field in runtime_fields:
         runtime = runtime[field]
     output.mkdir(parents=True, exist_ok=False)
+    runtime_sha256 = hashlib.sha256(canonical(runtime).encode()).hexdigest()
+    if profile_name == REPAIRED:
+        from unified_normal_generation import prepare_case
+
+        derived_case = prepare_case(inputs, output, runtime_sha256)
+    else:
+        derived_case = read(inputs["normal_case"])["case"]
+        derived_case["runtime_sha256"] = runtime_sha256
     source = output / "source"
     source.mkdir()
-    for name in ("unified_normal_contract", "unified_normal_replay", "unified_normal_source"):
+    for name in (
+        "unified_normal_contract",
+        "unified_normal_replay",
+        "unified_normal_source",
+        "unified_normal_profiles",
+        "unified_normal_generation",
+    ):
         shutil.copyfile(Path(__file__).with_name(name + ".py"), source / (name + ".py"))
     files = dict(sorting["files"])
     roots = set(sorting["roots"])
@@ -84,6 +107,10 @@ def build(inputs, output):
         runtime_path,
     ):
         include(path)
+    if profile_name == REPAIRED:
+        for name in ("source_review", "generation", "normal_plan", "normal_recipe", "normal_case"):
+            include(inputs[name])
+        include(read(inputs["generation"])["authorization"]["path"])
     tree(normal)
     tree(source)
     spec = read(inputs["mqar_spec"])
@@ -127,21 +154,19 @@ def build(inputs, output):
             },
         }
     )
-    case = read(inputs["normal_case"])["case"]
-    case["runtime_sha256"] = hashlib.sha256(canonical(runtime).encode()).hexdigest()
     request = {
         "schema": "UNIFIED_NORMAL_REQUEST_V1",
-        "run": case,
+        "run": derived_case,
         "predecessors": predecessors,
         "normal": {
-            "profile": PROFILE,
+            "profile": profile_name,
             "package": str(normal),
-            "source_identity_sha256": SOURCE,
+            "source_identity_sha256": release["source"],
             "wheel_sha256": WHEEL,
             "runtime_record": str(runtime_path),
             "runtime_record_sha256": RUNTIME_RECORD,
             "runtime_path": runtime_fields,
-            "runtime_sha256": case["runtime_sha256"],
+            "runtime_sha256": derived_case["runtime_sha256"],
         },
         "science": sorting["science"],
         "roots": sorted(roots),

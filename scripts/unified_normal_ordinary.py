@@ -4,6 +4,7 @@ import hashlib
 from pathlib import Path, PurePosixPath
 
 from unified_normal_contract import canonical, read, require
+from unified_normal_profiles import PROFILES
 
 
 def inference_observation(root, case, observed):
@@ -69,7 +70,7 @@ def replay(spec, recorded, inputs):
     """No credentials/API calls, saved model restore, optimizer or RNG restoration."""
     require(
         set(spec) == {"profile", "source_request", "result", "data", "snapshot", "index"}
-        and spec["profile"] == "REPAIRED_NORMAL_V1",
+        and spec["profile"] in PROFILES,
         "UNIFIED_ORDINARY_PROFILE_SCHEMA",
     )
     candidate = Path(spec["source_request"]).parents[2]
@@ -78,6 +79,10 @@ def replay(spec, recorded, inputs):
 
     _candidate(candidate)
     requested = read(spec["source_request"])
+    require(
+        spec["profile"] == requested["normal"]["profile"],
+        "UNIFIED_ORDINARY_REQUEST_PROFILE",
+    )
     deployments = read(candidate / "PLAN-UNAPPROVED.json")["deployments"]
     deployment = next(row for row in deployments if row["case_id"] == requested["run"]["id"])
     require(

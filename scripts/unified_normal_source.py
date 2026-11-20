@@ -3,6 +3,8 @@
 from pathlib import Path
 
 from unified_normal_contract import canonical, descriptor, digest, read, require
+from unified_normal_profiles import PROFILES, REPAIRED
+from unified_normal_profiles import selected as source_profile
 
 SOURCE = "89b7e3ac5b42716e24d0d2a1994d13c32845e0c93a668f284e3cb341fe301cb8"
 WHEEL = "a1e1db146ac0fef3583edbc6bee1d41ed1e83dffe85702c09667d34c96047e90"
@@ -15,7 +17,7 @@ def service_names(deployment):
     import re
 
     require(
-        deployment["source_profile"] == PROFILE
+        deployment["source_profile"] in PROFILES
         and type(deployment["nonce"]) is str
         and re.fullmatch(r"[0-9a-f]{32}", deployment["nonce"]),
         "UNIFIED_NORMAL_SERVICE_DECLARATION",
@@ -32,6 +34,7 @@ def operator_profile(candidate, deployment):
     result = profile(candidate, deployment)
     _request_path, request = descriptor(candidate)
     root = Path(candidate) / "payload"
+    expected_source = source_profile(request["normal"]["profile"])["source"]
     plan_path = root / "unified/normal-plan.json"
     plan = read(plan_path)
     case = request["run"]
@@ -40,7 +43,7 @@ def operator_profile(candidate, deployment):
         and plan["schema"] == "normal-training-plan-v1"
         and plan["purpose"] == "fresh_normal_training"
         and plan["engineering_only"] is False
-        and plan["source_identity_sha256"] == SOURCE
+        and plan["source_identity_sha256"] == expected_source
         and set(plan["cases"]) == {case["id"]}
         and digest(plan_path) == deployment["normal_plan_sha256"] == case["plan_sha256"],
         "UNIFIED_NORMAL_PLAN_SCOPE",
@@ -48,7 +51,7 @@ def operator_profile(candidate, deployment):
     recipe = read(root / "configs" / (case["id"] + ".yaml"))
     require(
         all(case["config"][name] == recipe[name] for name in ("model", "schedule", "optim"))
-        and case["source_identity_sha256"] == SOURCE
+        and case["source_identity_sha256"] == expected_source
         and case["engineering_only"] is False
         and case["world_size"] == 2
         and case["global_batch"] == recipe["schedule"]["batch_size"]
@@ -106,6 +109,15 @@ def operator_profile(candidate, deployment):
     )
     from unified_normal_authority import binding as authority_binding
 
+    if request["normal"]["profile"] == REPAIRED:
+        from unified_normal_generation import intent_value
+
+        generation = intent_value(plan["generation"], REPAIRED)
+        require(
+            deployment["nonce"] == generation["nonce"],
+            "UNIFIED_GENERATION_NAMESPACE_BINDING",
+        )
+
     return {
         **result,
         "normal_plan_sha256": digest(plan_path),
@@ -118,6 +130,9 @@ def profile(candidate, deployment):
     """Exact explicit profile, including selected-child setup and genuine runtime."""
     _request_path, request = descriptor(candidate)
     value = request["normal"]
+    require(value.get("profile") in PROFILES, "UNIFIED_EXPLICIT_NORMAL_PROFILE")
+    profile_name = value["profile"]
+    expected_source = source_profile(profile_name)["source"]
     require(
         set(value)
         == {
@@ -130,14 +145,15 @@ def profile(candidate, deployment):
             "runtime_path",
             "runtime_sha256",
         }
-        and value["profile"] == PROFILE
-        and deployment["source_profile"] == PROFILE
-        and value["source_identity_sha256"] == SOURCE
+        and deployment["source_profile"] == profile_name
+        and value["source_identity_sha256"] == expected_source
         and value["wheel_sha256"] == WHEEL,
         "UNIFIED_EXPLICIT_NORMAL_PROFILE",
     )
     root = Path(value["package"])
-    require(digest(root / "normal-source-identity.json") == SOURCE, "UNIFIED_NORMAL_IDENTITY")
+    require(
+        digest(root / "normal-source-identity.json") == expected_source, "UNIFIED_NORMAL_IDENTITY"
+    )
     identity = read(root / "normal-source-identity.json")
     require(
         str(root.resolve()) in request["roots"]
@@ -186,8 +202,8 @@ def profile(candidate, deployment):
         "UNIFIED_RUNTIME_TARGET",
     )
     return {
-        "normal_source_identity_sha256": SOURCE,
+        "normal_source_identity_sha256": expected_source,
         "normal_wheel_sha256": WHEEL,
         "normal_runtime_sha256": value["runtime_sha256"],
-        "normal_profile": PROFILE,
+        "normal_profile": profile_name,
     }

@@ -19,6 +19,7 @@ from unified_normal_contract import (
     read,
     require,
 )
+from unified_normal_profiles import PROFILES
 
 
 def replay(request, case_id):
@@ -87,7 +88,7 @@ def replay(request, case_id):
                     result = genuine_replay(spec["spec"])
             else:
                 require("profile" in spec, "UNIFIED_ORDINARY_PROFILE_REQUIRED")
-                if spec["profile"] == "REPAIRED_NORMAL_V1":
+                if spec["profile"] in PROFILES:
                     from unified_normal_ordinary import replay as replay_normal
 
                     require(

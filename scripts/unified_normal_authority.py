@@ -94,9 +94,28 @@ def binding(candidate):
 
 
 def before_auth(args):
-    """An unbound review candidate may be inspected, but never publish or allocate."""
-    if args.command in {"publish", "submit"}:
-        require(
-            binding(args.candidate_dir)["normal_authority_bound"],
-            "UNIFIED_NORMAL_EXECUTION_AUTHORITY_REQUIRED",
-        )
+    """Guard public ingress before paths; keep no-auth inspection/planning available."""
+    # These routes already require source authority via seal/approval validation.
+    # Apply the same predicate before loading caller-supplied authority paths.
+    if args.command in {
+        "publish",
+        "publish-resume",
+        "submit",
+        "prepare",
+        "probe",
+        "seal",
+        "status",
+        "collect",
+        "services",
+        "accept",
+        "reconcile",
+    }:
+        require_bound(args.candidate_dir)
+
+
+def require_bound(candidate):
+    """Source-plan review and human decision precede preparation and action seals."""
+    require(
+        binding(candidate)["normal_authority_bound"],
+        "UNIFIED_NORMAL_EXECUTION_AUTHORITY_REQUIRED",
+    )

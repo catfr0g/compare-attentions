@@ -9,7 +9,7 @@ from pathlib import Path, PurePosixPath
 
 from build_unified_normal_contract import build as build_request
 from unified_normal_contract import canonical, digest, read, require
-from unified_normal_source import PROFILE, SOURCE
+from unified_normal_source import PROFILE
 
 PARENT = "e10e7e693e5eeca90ba732d2644d8c00a303bd32533abe04b3789955c5b499f5"
 NORMAL = "67861b9b2e62081c4b486ac918c0716c32257f3c5af5fe6b5bf01aa5bb62cf1c"
@@ -40,7 +40,9 @@ def unpack(archive, target, expected, prefix=""):
                 and ".." not in part.parts
                 and "\\" not in name
                 and ":" not in name
-                and not saved.getinfo(name).is_dir(),
+                and saved.getinfo(name).orig_filename == name
+                and not saved.getinfo(name).is_dir()
+                and (saved.getinfo(name).external_attr >> 16) & 0o170000 != 0o120000,
                 "UNIFIED_SAFE_ARCHIVE",
             )
             if not name.startswith(prefix):
@@ -57,7 +59,7 @@ def replace(path, before, after):
     path.write_text(text.replace(before, after), encoding="utf-8", newline="\n")
 
 
-def integrate(source):
+def integrate(source, profile_name=PROFILE):
     """Every audited consumer imports the same typed contract, without monkeypatching."""
     for path in source.glob("*.py"):
         if path.name == "qualified_bridge.py":
@@ -67,6 +69,14 @@ def integrate(source):
             "seed202_pilot.qualified_bridge import", "unified_normal_contract import"
         )
         path.write_text(text, encoding="utf-8", newline="\n")
+    replace(
+        source / "cli.py",
+        '    try:\n        if args.command == "composite":',
+        "    try:\n"
+        "        from unified_normal_authority import before_auth\n\n"
+        "        before_auth(args)\n"
+        '        if args.command == "composite":',
+    )
     seal = source / "seal.py"
     text = seal.read_text(encoding="utf-8")
     start = text.index(
@@ -80,6 +90,13 @@ def integrate(source):
         '    predecessors = proof["predecessor_evidence"]',
     )
     seal.write_text(text, encoding="utf-8", newline="\n")
+    replace(
+        seal,
+        '    """Bind one reviewed singleton to a fresh provider proof; issue no effects."""\n',
+        '    """Bind one reviewed singleton to a fresh provider proof; issue no effects."""\n'
+        "    from unified_normal_authority import require_bound\n\n"
+        '    require_bound(plan["candidate_root"])\n',
+    )
     replace(
         seal,
         "    case = require_authorized_case(case_id)\n"
@@ -157,8 +174,10 @@ def integrate(source):
         source / "host_services.py",
         '    def read() -> None:\n        with services.service_env(values, "track"):',
         "    def read() -> None:\n"
-        "        from unified_normal_source import PROFILE, service_names\n\n"
-        '        names = service_names({"source_profile": PROFILE, "nonce": nonce})\n'
+        "        from unified_normal_source import service_names\n\n"
+        '        names = service_names({"source_profile": '
+        + repr(profile_name)
+        + ', "nonce": nonce})\n'
         '        with services.service_env(values, "track"):',
     )
     replace(
@@ -261,12 +280,23 @@ def build(inputs, normal_archive, destination):
     parent = Path(inputs["sorting_candidate"]) / "sorting-mqar-seed202-pilot-v1.zip"
     unpack(parent, destination / "payload", PARENT)
     normal = destination / "payload/normal-package"
-    unpack(normal_archive, normal, NORMAL, "normal-package/")
-    require(digest(normal / "normal-source-identity.json") == SOURCE, "UNIFIED_NORMAL_CLONE")
+    from unified_normal_profiles import REPAIRED, authenticate_package
+    from unified_normal_profiles import selected as source_profile
+
+    profile_name = inputs.get("source_profile", PROFILE)
+    release = source_profile(profile_name)
+    unpack(normal_archive, normal, release["archive"], release["prefix"])
+    authenticate_package(normal, profile_name)
+    if profile_name == REPAIRED:
+        require("generation" in inputs, "UNIFIED_GENERATION_REQUIRED")
     request_inputs = {
         k: v
         for k, v in inputs.items()
-        if k not in {"normal_plan", "normal_recipe", "normal_review", "normal_decision"}
+        if k
+        not in (
+            {"normal_review", "normal_decision"}
+            | ({"normal_plan", "normal_recipe"} if profile_name != REPAIRED else set())
+        )
     }
     request_inputs["normal_package"] = str(normal)
     packet = destination / "request-build"
@@ -285,6 +315,8 @@ def build(inputs, normal_archive, destination):
         "unified_normal_live",
         "unified_normal_replay",
         "unified_normal_source",
+        "unified_normal_profiles",
+        "unified_normal_generation",
         "unified_normal_task",
         "unified_normal_host",
         "unified_normal_authority",
@@ -292,7 +324,7 @@ def build(inputs, normal_archive, destination):
         "unified_normal_ordinary",
     ):
         shutil.copyfile(Path(__file__).with_name(name + ".py"), host / (name + ".py"))
-    integrate(host / "seed202_pilot")
+    integrate(host / "seed202_pilot", profile_name)
     format_generated(
         [
             host / "seed202_pilot" / (name + ".py")
@@ -314,7 +346,11 @@ def build(inputs, normal_archive, destination):
     selected = request["run"]
     require(selected["id"] == "mqar-k64-deltanet-seed202", "UNIFIED_CURRENT_AUTHORIZATION")
     deployment = next(r for r in plan["deployments"] if r["case_id"] == selected["id"])
-    deployment["source_profile"] = PROFILE
+    deployment["source_profile"] = profile_name
+    if profile_name == REPAIRED:
+        from unified_normal_generation import apply_namespace, intent
+
+        apply_namespace(payload, deployment, intent(inputs["generation"], profile_name))
     recipe = payload / "configs" / (selected["id"] + ".yaml")
     shutil.copyfile(inputs["normal_recipe"], recipe)
     deployment["config_sha256"] = digest(recipe)
@@ -322,7 +358,7 @@ def build(inputs, normal_archive, destination):
         "schema": "normal-training-plan-v1",
         "purpose": "fresh_normal_training",
         "engineering_only": False,
-        "source_identity_sha256": SOURCE,
+        "source_identity_sha256": release["source"],
         "cases": {
             selected["id"]: {
                 "seed": selected["seed"],
@@ -334,7 +370,8 @@ def build(inputs, normal_archive, destination):
             }
         },
     }
-    save(payload / "unified/normal-plan.json", normal_plan)
+    if profile_name != REPAIRED:
+        save(payload / "unified/normal-plan.json", normal_plan)
     from unified_normal_authority import SCHEMA, validate
 
     authority = {"schema": SCHEMA, "status": "UNBOUND_REVIEW_AND_DECISION_REQUIRED", "files": {}}
@@ -380,13 +417,14 @@ def build(inputs, normal_archive, destination):
     (deploy / "kernel/kernel.py").write_text(source, encoding="utf-8", newline="\n")
     format_generated([deploy / "kernel/kernel.py"])
     deployment["kernel_source_sha256"] = digest(deploy / "kernel/kernel.py")
-    plan["source_profile"] = PROFILE
+    plan["source_profile"] = profile_name
     save(payload / "PLAN-UNAPPROVED.json", plan)
     repository = Path(__file__).resolve().parents[1]
     maintained = [
         *repository.joinpath("scripts").glob("unified_normal_*.py"),
         repository / "scripts/build_unified_normal_contract.py",
         repository / "docs/unified-normal-live-window.md",
+        repository / "docs/unified-normal-generation.md",
         *repository.joinpath("tests/scripts").glob("*unified_normal*.py"),
     ]
     for original in maintained:

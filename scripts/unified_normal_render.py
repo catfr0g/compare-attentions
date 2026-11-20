@@ -172,6 +172,9 @@ def render(metadata, deployment, payload):
     )
     bound = ast.literal_eval(assignment.value)
     bound.update(
+        nonce=deployment["nonce"],
+        operator_owner=deployment["dataset_target"].split("/")[0],
+        operator_slug=deployment["dataset_target"].split("/")[1],
         operator_sha256=deployment["worker_sha256"],
         normal_service_prefix=service_names(deployment)["normal_service_prefix"],
         normal_source_sha256=digest(Path(payload) / "normal-package/normal-source-identity.json"),
