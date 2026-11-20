@@ -141,6 +141,20 @@ def descriptor(candidate):
             "UNIFIED_PREDECESSOR_INPUT_PIN",
         )
     require(len(ids) == len(set(ids)), "UNIFIED_DUPLICATE_PREDECESSOR")
+    from unified_normal_profiles import REMAINING
+
+    if value["normal"]["profile"] == REMAINING:
+        from normal_remaining_scope import require_prefix
+        from unified_normal_remaining import PLAN_PINS
+
+        require_prefix(value["run"]["id"], ids)
+        require(
+            value["run"]["plan_sha256"] == PLAN_PINS[value["run"]["id"]], "REMAINING_FROZEN_PLAN"
+        )
+        require(
+            all(row["policy"] == Policy.ORDINARY for row in value["predecessors"]),
+            "REMAINING_ORDINARY_PREFIX_REQUIRED",
+        )
     return path, value
 
 
@@ -392,7 +406,10 @@ def next_qualified_case(candidate, classic, acceptances):
     operator_profile(candidate, deployments[0])
     rows = value["predecessors"]
     require(
-        [str(Path(p).resolve()) for p in [classic, *acceptances]]
+        [
+            str(Path(p).resolve())
+            for p in ([classic] if classic is not None else []) + list(acceptances)
+        ]
         == [str(Path(row["path"]).resolve()) for row in rows],
         "UNIFIED_NEXT_PREFIX",
     )

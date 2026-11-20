@@ -6,7 +6,14 @@ from unified_normal_contract import digest, read, require
 
 LEGACY = "REPAIRED_NORMAL_V1"
 REPAIRED = "REPAIRED_NORMAL_707_V1"
+REMAINING = "REMAINING_NORMAL_FIXED_V1"
 PROFILES = {
+    REMAINING: {
+        "source": "d7e97c813df77ee30b613c77aaf0b8a47934211446116e9bd58ec48b6f8250a0",
+        "archive": "3128c670a9a86ad2a01a1f31367f0d64eccbe191a71611fdd911a66df31a3117",
+        "prefix": "normal-package/",
+        "review_policy": "EXTERNAL_TYPED_NORMAL_SOURCE_AND_PLAN",
+    },
     LEGACY: {
         "source": "89b7e3ac5b42716e24d0d2a1994d13c32845e0c93a668f284e3cb341fe301cb8",
         "archive": "67861b9b2e62081c4b486ac918c0716c32257f3c5af5fe6b5bf01aa5bb62cf1c",

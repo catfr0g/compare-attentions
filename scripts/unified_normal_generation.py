@@ -9,7 +9,7 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 from unified_normal_contract import canonical, digest, read, require
-from unified_normal_profiles import REPAIRED, authenticate_review, selected
+from unified_normal_profiles import REMAINING, REPAIRED, authenticate_review, selected
 
 CONSENT = "d2ae90adec3a5a22f58aae0537064a8991159bcbdc2a0c82306c581b992da823"
 OLD_NONCE = "8043dc515cd194e8f34777d51522a3b8"
@@ -40,9 +40,13 @@ def intent_value(value, profile_name):
         and value["schema"] == SCHEMA,
         "UNIFIED_GENERATION_SCHEMA",
     )
+    from normal_remaining_scope import CASE_IDS
+
     require(
-        profile_name == REPAIRED
-        and value["case_id"] == CASE
+        (
+            (profile_name == REPAIRED and value["case_id"] == CASE)
+            or (profile_name == REMAINING and value["case_id"] in CASE_IDS)
+        )
         and value["source_identity_sha256"] == selected(profile_name)["source"],
         "UNIFIED_GENERATION_SCOPE",
     )
@@ -55,6 +59,11 @@ def intent_value(value, profile_name):
         "UNIFIED_GENERATION_FRESH_NONCE",
     )
     authorization = value["authorization"]
+    if profile_name == REMAINING:
+        from normal_remaining_scope import permission
+
+        permission(authorization)
+        return value
     require(
         type(authorization) is dict
         and set(authorization) == {"path", "sha256"}
@@ -80,19 +89,23 @@ def prepare_case(inputs, output, runtime_sha256):
     """Re-derive through authenticated NORMAL derive, not by relabelling old case."""
     name = inputs["source_profile"]
     generation = intent(inputs["generation"], name)
-    authenticate_review(inputs["source_review"], name)
+    if name != REMAINING:
+        authenticate_review(inputs["source_review"], name)
+    # The new release is frozen UNBOUND; its source+plan review is required by
+    # the existing typed NORMAL authority before preparation or credentials.
+    case_id = generation["case_id"]
     predecessor = read(inputs["normal_plan"])
-    require(set(predecessor["cases"]) == {CASE}, "UNIFIED_GENERATION_ONE_CASE")
+    require(set(predecessor["cases"]) == {case_id}, "UNIFIED_GENERATION_ONE_CASE")
     normal_plan = {
         "schema": "normal-training-plan-v1",
         "purpose": "fresh_normal_training",
         "engineering_only": False,
         "source_identity_sha256": selected(name)["source"],
         "generation": generation,
-        "cases": {CASE: {**predecessor["cases"][CASE], "runtime_sha256": runtime_sha256}},
+        "cases": {case_id: {**predecessor["cases"][case_id], "runtime_sha256": runtime_sha256}},
     }
     require(
-        normal_plan["cases"][CASE]["recipe_sha256"] == digest(inputs["normal_recipe"]),
+        normal_plan["cases"][case_id]["recipe_sha256"] == digest(inputs["normal_recipe"]),
         "UNIFIED_GENERATION_RECIPE",
     )
     plan_path = output / "payload/unified/normal-plan.json"
@@ -140,7 +153,7 @@ def prepare_case(inputs, output, runtime_sha256):
             str(root),
             str(package),
             str(plan_path),
-            CASE,
+            case_id,
             str(inputs["normal_recipe"]),
             str(data),
         ]
