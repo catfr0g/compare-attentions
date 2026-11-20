@@ -4,6 +4,8 @@ import hashlib
 from pathlib import Path, PurePosixPath
 
 from unified_normal_contract import canonical, read, require
+from unified_normal_host_view import lifecycle as assemble_lifecycle
+from unified_normal_host_view import raw_view, reader_identity, training_view
 from unified_normal_profiles import PROFILES
 
 
@@ -223,8 +225,9 @@ def replay(spec, recorded, inputs):
             )
             verify_native_service(root, observation)
         require(
-            training["raw"]["events"] == raw["events"]
-            and training["raw"]["parameters"] == raw["parameters"],
+            raw_view(training["raw"]) == raw_view(raw)
+            and training_view(training)
+            == training_view(read(root / "training-fresh-readback.json")),
             "UNIFIED_ORDINARY_TRAINING_RAW_JOIN",
         )
         manifest = read(snapshot / "snapshot.json")
@@ -296,18 +299,7 @@ def replay(spec, recorded, inputs):
             "snapshot": str(snapshot.resolve()),
             "files": manifest["files"],
         }
-        lifecycle = {
-            "schema": "normal-training-lifecycle-acceptance-v1",
-            "case": case,
-            "scope": "TARGET_NORMAL_LIFECYCLE",
-            "status": "ACCEPTED_NORMAL_LIFECYCLE",
-            "source": source,
-            "native": native,
-            "training": training["receipt"],
-            "immutable_publications": publication["publications"],
-            "task_quality_acceptance": "SEPARATE_TASK_SPECIFIC_ACCEPTANCE_REQUIRED",
-            "next_launch_authorized": False,
-        }
+        lifecycle = assemble_lifecycle(case, source, native, training, publication["publications"])
         inference = inference_observation(root, case, recorded["inference"])
         expected = {
             "schema": "unified-normal-whole-acceptance-v1",
@@ -324,6 +316,7 @@ def replay(spec, recorded, inputs):
             "lifecycle": lifecycle,
             "status": "ACCEPTED_UNIFIED_NORMAL",
             "whole_lifecycle_sha256": hashlib.sha256(canonical(lifecycle).encode()).hexdigest(),
+            "host_reader": reader_identity(),
         }
         require(canonical(recorded) == canonical(expected), "UNIFIED_ORDINARY_WHOLE_OBJECT")
     return expected

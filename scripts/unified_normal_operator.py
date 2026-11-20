@@ -323,6 +323,7 @@ def build(inputs, normal_archive, destination):
         "unified_normal_generation",
         "unified_normal_task",
         "unified_normal_host",
+        "unified_normal_host_view",
         "unified_normal_authority",
         "unified_normal_publications",
         "unified_normal_ordinary",

@@ -245,10 +245,11 @@ def inference_readback(root, case, values):
 
 def consume(package, root, case, values, data, *, snapshot, accept=False):
     """Join actual source/native/training/task/inference consumers with one recipe."""
-    from normal_training_acceptance import accept as lifecycle_accept
     from normal_training_acceptance import training_readback, verify_sources
     from normal_training_native import verify_native
     from normal_training_plan import canonical
+    from unified_normal_host_view import lifecycle as assemble_lifecycle
+    from unified_normal_host_view import reader_identity, training_view
     from unified_normal_publications import publication_readback
 
     source = verify_sources(package, root, case)
@@ -273,11 +274,18 @@ def consume(package, root, case, values, data, *, snapshot, accept=False):
         "next_launch_authorized": False,
     }
     if accept:
-        lifecycle = lifecycle_accept(package, root, case, values)
+        require(native == read(Path(root) / "native-proof.json"), "NORMAL_HOST_NATIVE_DRIFT")
+        require(
+            training_view(training)
+            == training_view(read(Path(root) / "training-fresh-readback.json")),
+            "NORMAL_HOST_SERVICE_DRIFT",
+        )
+        lifecycle = assemble_lifecycle(case, source, native, training, publication["publications"])
         result.update(
             schema="unified-normal-whole-acceptance-v1",
             status="ACCEPTED_UNIFIED_NORMAL",
             lifecycle=lifecycle,
+            host_reader=reader_identity(),
         )
         require(
             task.get("final_sha256", native["final_sha256"]) == native["final_sha256"],
@@ -294,6 +302,13 @@ def validate_arguments(args):
     for name in ("destination", "index", "output", "private", "service_snapshot"):
         require(getattr(args, name, None) is not None, "UNIFIED_HOST_REQUIRED_ARGUMENT")
     require(args.task_data is not None or args.mqar_data is not None, "UNIFIED_HOST_REQUIRED_DATA")
+    require(
+        all(
+            not Path(args.output).resolve().is_relative_to(Path(p).resolve())
+            for p in (args.destination, args.service_snapshot)
+        ),
+        "UNIFIED_HOST_IMMUTABLE_OUTPUT",
+    )
 
 
 def run_public(args, approval, provider, metadata, source):
@@ -318,7 +333,7 @@ def run_public(args, approval, provider, metadata, source):
     require(inventory(args.destination) == index["inventory"], "UNIFIED_HOST_DOWNLOAD_INVENTORY")
     root = Path(args.destination) / ("normal-" + plan["nonce"])
     payload = candidate / "payload"
-    script = payload / "source/src/unified_normal_host.py"
+    script = Path(__file__).resolve()
     command = [
         shutil.which("uv"),
         "run",
@@ -378,6 +393,7 @@ def run_public(args, approval, provider, metadata, source):
     )
     require(child.returncode == 0, "UNIFIED_NORMAL_HOST_REJECTED")
     require(kernel_readback(provider, metadata, source) == before, "UNIFIED_HOST_PROVIDER_AFTER")
+    require(inventory(args.destination) == index["inventory"], "UNIFIED_HOST_DOWNLOAD_AFTER")
     return read(args.output)
 
 
@@ -389,6 +405,13 @@ def main(argv=None):
     parser.add_argument("--request", type=Path)
     parser.add_argument("--phase", choices=("services", "accept"), required=True)
     args = parser.parse_args(argv)
+    require(
+        all(
+            not args.output.resolve().is_relative_to(p.resolve())
+            for p in (args.result.parent, args.snapshot, args.package)
+        ),
+        "UNIFIED_HOST_IMMUTABLE_OUTPUT",
+    )
     require(
         os.environ.get("CUDA_VISIBLE_DEVICES") == "-1"
         and os.environ.get("PYTHONDONTWRITEBYTECODE") == "1",

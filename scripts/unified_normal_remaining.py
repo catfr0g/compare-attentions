@@ -183,6 +183,17 @@ def build_request(inputs, output):
         previous = Path(spec["source_request"]).parents[2]
         for root in (previous, Path(spec["result"]).parent, spec["data"], spec["snapshot"]):
             tree(root)
+        # Ordinary replay requires explicit roots as well as the complete file pins.
+        # These subtrees were already inventoried above; do not reread their bytes.
+        roots.update(
+            str(path.resolve())
+            for path in (
+                previous / "payload",
+                previous / "payload/normal-package",
+                previous / "payload/source/src",
+                Path(spec["result"]),
+            )
+        )
         include(row["path"])
         include(spec["index"])
         require(digest(row["path"]) == row["sha256"], "REMAINING_PREFIX_PIN")
