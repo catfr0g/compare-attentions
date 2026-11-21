@@ -13,6 +13,7 @@ from unified_normal_profiles import (
     FRESH_RESTART,
     REMAINING_FOUR,
     REMAINING_SIX,
+    REMAINING_THREE,
     REPAIRED,
     authenticate_review,
     is_remaining_profile,
@@ -54,6 +55,8 @@ def intent_value(value, profile_name):
     )
     from normal_remaining_scope import CASE_IDS
 
+    if profile_name == REMAINING_THREE:
+        require(value["case_id"] in CASE_IDS[5:], "REMAINING_THREE_CASE_SCOPE")
     if profile_name == REMAINING_FOUR:
         require(value["case_id"] in CASE_IDS[4:], "REMAINING_FOUR_CASE_SCOPE")
     if profile_name == REMAINING_SIX:

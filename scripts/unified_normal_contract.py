@@ -19,6 +19,7 @@ class Policy(StrEnum):
     SORTING_DELTA = "QUALIFIED_SORTING_DELTA_TAIL_V1"
     MQAR_CONTINUATION = "QUALIFIED_MQAR_CONTINUATION_TAIL_V1"
     COMPLETED_NORMAL = "QUALIFIED_MQAR_DELTA303_COMPLETED_NATIVE_V1"
+    COMPLETED_SORTING404 = "QUALIFIED_SORTING_CLASSIC404_COMPLETED_NATIVE_V1"
 
 
 # This is an authority-approved historical case list, not task dispatch logic.
@@ -58,6 +59,7 @@ def valid_evidence_row(row):
     return (
         type(row["case_id"]) is str
         and (policy != Policy.COMPLETED_NORMAL or row["case_id"] == "mqar-k64-deltanet-seed303")
+        and (policy != Policy.COMPLETED_SORTING404 or row["case_id"] == "sorting-classic-seed404")
         and row["case_id"] not in {case for case, _sha in QUALIFIED.values()}
         and type(row["acceptance_sha256"]) is str
         and len(row["acceptance_sha256"]) == 64
@@ -128,9 +130,19 @@ def descriptor(candidate):
         policy = Policy(row["policy"])
         if policy == Policy.COMPLETED_NORMAL:
             require(
-                value["normal"]["profile"] == "REMAINING_FOUR_NONBLOCKING_TRACKING_V1"
+                value["normal"]["profile"]
+                in {
+                    "REMAINING_FOUR_NONBLOCKING_TRACKING_V1",
+                    "REMAINING_THREE_FINISH_IMPORT_FIXED_V1",
+                }
                 and row["case_id"] == "mqar-k64-deltanet-seed303",
                 "UNIFIED_COMPLETED_CASE3_ONLY",
+            )
+        if policy == Policy.COMPLETED_SORTING404:
+            require(
+                value["normal"]["profile"] == "REMAINING_THREE_FINISH_IMPORT_FIXED_V1"
+                and row["case_id"] == "sorting-classic-seed404",
+                "UNIFIED_COMPLETED_CASE4_ONLY",
             )
         if policy in QUALIFIED:
             require(

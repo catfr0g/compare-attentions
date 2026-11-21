@@ -12,6 +12,7 @@ from unified_normal_profiles import (
     REMAINING,
     REMAINING_FOUR,
     REMAINING_SIX,
+    REMAINING_THREE,
     authenticate_package,
     is_remaining_profile,
     selected,
@@ -50,13 +51,25 @@ FOUR_PLAN_PINS = {
 }
 
 
+THREE_PLAN_PINS = {
+    "sorting-deltanet-seed404": "1fa8205d7a0c9d262d69245e6f54139cd046a1927ef81e47c2639725c5264e8d",
+    "mqar-k64-classic-seed404": "10ef12f8b1921fad2432f2cea183f8faaabbc4e080453e40977123a21ab97bdf",
+    "mqar-k64-deltanet-seed404": "a420265eb750da5a3c29dfa1f1929676070105647b87c9c6254307162cbbbf84",
+}
+
+
 def require_frozen_plan(case_id, path, profile=REMAINING):
     """The bounded release cannot be repurposed for a different recipe or nonce."""
     require_plan_pin(case_id, digest(path), profile)
 
 
 def require_plan_pin(case_id, pin, profile):
-    if profile == REMAINING_FOUR:
+    if profile == REMAINING_THREE:
+        require(
+            case_id in CASE_IDS[5:] and pin == THREE_PLAN_PINS.get(case_id),
+            "REMAINING_THREE_FROZEN_PLAN",
+        )
+    elif profile == REMAINING_FOUR:
         require(
             case_id in CASE_IDS[4:] and pin == FOUR_PLAN_PINS.get(case_id),
             "REMAINING_FOUR_FROZEN_PLAN",
@@ -144,10 +157,25 @@ def transition(candidate, case_id):
 
 
 def prefix_policies(rows, profile):
-    """Only the repaired four-case release can consume the truthful case3 qualification."""
+    """Only future three/four-case releases consume their bounded qualifications."""
     from unified_normal_contract import Policy
 
-    if profile == REMAINING_FOUR:
+    if profile == REMAINING_THREE:
+        require(
+            all(
+                row["policy"]
+                == (
+                    Policy.COMPLETED_NORMAL
+                    if row["case_id"] == CASE_IDS[3]
+                    else Policy.COMPLETED_SORTING404
+                    if row["case_id"] == CASE_IDS[4]
+                    else Policy.ORDINARY
+                )
+                for row in rows
+            ),
+            "REMAINING_QUALIFIED_CASE4_PREFIX_REQUIRED",
+        )
+    elif profile == REMAINING_FOUR:
         require(
             all(
                 row["policy"]
@@ -218,6 +246,7 @@ def build_request(inputs, output):
         "normal_remaining_scope",
         "normal_fresh_restart_scope",
         "completed_normal_publication",
+        "completed_sorting404_publication",
         "training_diagnostics",
     ):
         shutil.copyfile(Path(__file__).with_name(helper + ".py"), source / (helper + ".py"))
@@ -266,10 +295,23 @@ def build_request(inputs, output):
             from completed_normal_publication import replay_completed
 
             require(
-                profile == REMAINING_FOUR and row["case_id"] == CASE_IDS[3],
+                profile in {REMAINING_FOUR, REMAINING_THREE} and row["case_id"] == CASE_IDS[3],
                 "REMAINING_QUALIFIED_CASE3_SCOPE",
             )
             replay_completed(spec, read(row["path"]))
+            tree(Path(spec["subject"]).parent)
+            include(spec["review"])
+            include(row["path"])
+            require(digest(row["path"]) == row["sha256"], "REMAINING_PREFIX_PIN")
+            continue
+        if row["policy"] == "QUALIFIED_SORTING_CLASSIC404_COMPLETED_NATIVE_V1":
+            from completed_sorting404_publication import replay_completed as replay_sorting404
+
+            require(
+                profile == REMAINING_THREE and row["case_id"] == CASE_IDS[4],
+                "REMAINING_QUALIFIED_CASE4_SCOPE",
+            )
+            replay_sorting404(spec, read(row["path"]))
             tree(Path(spec["subject"]).parent)
             include(spec["review"])
             include(row["path"])

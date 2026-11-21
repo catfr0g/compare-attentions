@@ -10,7 +10,14 @@ REMAINING = "REMAINING_NORMAL_FIXED_V1"
 FRESH_RESTART = "SORTING_DELTA303_FRESH_RESTART_V1"
 REMAINING_SIX = "REMAINING_SIX_ELASTIC_FIXED_V1"
 REMAINING_FOUR = "REMAINING_FOUR_NONBLOCKING_TRACKING_V1"
+REMAINING_THREE = "REMAINING_THREE_FINISH_IMPORT_FIXED_V1"
 PROFILES = {
+    REMAINING_THREE: {
+        "source": "abe07f479fb5c18dc7f75f82778a381ffa8c20b5f227e8562459b870325d3501",
+        "archive": "caf263667ff8f4134080a9ce851836e2b6ad9a569d7a4ee1c4d5a4bea19301e7",
+        "prefix": "normal-package/",
+        "review_policy": "EXTERNAL_TYPED_NORMAL_SOURCE_AND_PLAN",
+    },
     REMAINING_FOUR: {
         "source": "c7bf54e164cd8815bda763e87cdecfd393ab9051e8bdaa5ccd7ef8f901f1abcc",
         "archive": "1893c8d995ad00785a58f818ba00688206e4642cfb3d3693582c05b8c397a8f4",
@@ -51,7 +58,7 @@ PROFILES = {
 
 def is_remaining_profile(name):
     """Finite old/new producer coexistence; never arbitrary source profiles."""
-    return name in (REMAINING, FRESH_RESTART, REMAINING_SIX, REMAINING_FOUR)
+    return name in (REMAINING, FRESH_RESTART, REMAINING_SIX, REMAINING_FOUR, REMAINING_THREE)
 
 
 def selected(name=LEGACY):

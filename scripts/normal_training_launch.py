@@ -107,6 +107,7 @@ def main(argv=None):
         wheel_root,
         root,
         root / "src",
+        root / "inherited-source",
         root / "inherited/operator",
         root / "inherited/operator/inherited",
         root / "inherited/operator/inherited/tools",
