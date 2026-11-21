@@ -1,5 +1,7 @@
 """Finite release membership and qualified-prefix policy controls."""
 
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -22,6 +24,53 @@ def test_future_release_only_changes_setup_and_identity(tmp_path):
     assert changed == {"setup.py", "normal-source-identity.json"}
     with pytest.raises(ValueError, match="CREATE_ONLY"):
         build_release(PACKAGE, Path(__file__).parents[2], root)
+
+
+def test_public_operator_distributes_sorting404_replay_imports(tmp_path):
+    from unified_normal_contract import read
+    from unified_normal_operator import build
+
+    selected = os.environ.get("UNIFIED_HOST_COPY_INPUTS")
+    if not selected:
+        pytest.skip("genuine BOUND remaining-three builder inputs not selected")
+    inputs = Path(selected)
+    candidate = build(
+        read(inputs), Path(os.environ["UNIFIED_HOST_COPY_ARCHIVE"]), tmp_path / "candidate"
+    )
+    host = candidate / "payload/source/src"
+    # Isolated interpreter: neither repository scripts nor PYTHONPATH can hide
+    # a missing emitted dependency, including the helper's transitive imports.
+    code = (
+        "import pathlib,sys;sys.path.insert(0,sys.argv[1]);"
+        "import completed_sorting404_publication as helper;"
+        "import completed_normal_publication as native;"
+        "import unified_normal_profiles as profiles;"
+        "root=pathlib.Path(sys.argv[1]).resolve();"
+        "assert all(pathlib.Path(m.__file__).resolve().parent == root "
+        "for m in (helper,native,profiles));"
+        "assert callable(helper.replay_completed)"
+    )
+    result = subprocess.run(
+        [
+            "uv",
+            "run",
+            "--offline",
+            "--no-sync",
+            "--project",
+            str(Path(__file__).resolve().parents[2]),
+            "python",
+            "-I",
+            "-B",
+            "-c",
+            code,
+            str(host),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_remaining_three_requires_two_truthful_qualified_predecessors():
