@@ -288,6 +288,18 @@ def test_saved_gloo_service_primary_is_safe_in_json_and_console(tmp_path, mode, 
     inputs = engineering_inputs(tmp_path, package)
     (tmp_path / "failure-mode.json").write_text(json.dumps({"mode": mode}))
     output = tmp_path / "run"
+    if mode != "identity":
+        console = saved_phase(package, inputs, output, "worker", expected_code=0)
+        diagnostics = json.loads((output / "training-diagnostics.json").read_bytes())
+        assert diagnostics["warnings"]
+        assert all(row["diagnostic"]["status"] == "warning" for row in diagnostics["warnings"])
+        assert not (output / "lifecycle-failure.json").exists()
+        assert json.loads((output / "out/run_identity.json").read_bytes())["status"] == "completed"
+        all_new_json = "\n".join(path.read_text() for path in output.rglob("*.json"))
+        for canary in ("CANARY_PRIVATE", "CANARY_SECONDARY", "private.invalid", "https://private"):
+            assert canary not in all_new_json
+            assert canary not in console
+        return
     console = saved_phase(package, inputs, output, "worker", expected_code=1)
     report = json.loads((output / "lifecycle-failure.json").read_bytes())
     assert report["exception_class"] == "LookupError"

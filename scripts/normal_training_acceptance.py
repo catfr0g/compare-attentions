@@ -1,4 +1,4 @@
-"""NORMAL host receipt/native/private-HF/ClearML acceptance, without scientific execution."""
+"""Hard native/private-HF acceptance with auxiliary, nonblocking ClearML diagnostics."""
 
 import hashlib
 import json
@@ -125,7 +125,17 @@ def _event_comparison(events):
 
 
 def training_readback(root, case, values):
-    """Independent SDK reads; do not count monitors as scientific events or discard them."""
+    """Observe tracking independently; service failure cannot reject native science."""
+    from training_diagnostics import observe
+
+    state = {"receipt": None, "raw": None, "fresh_sdk_readback": False}
+    return observe(
+        "normal_host_training_readback", lambda: _readback(root, case, values, state), state
+    )
+
+
+def _readback(root, case, values, state):
+    """Strict diagnostic predicate; raw evidence survives even a failed predicate."""
     from quality_inherit import leaf
     from training_completion import TrainingServiceTracker, validate_unsampled_readback
 
@@ -158,6 +168,10 @@ def training_readback(root, case, values):
             return TrainingServiceTracker._production_readback(envelope["task_id"])  # pylint: disable=protected-access
 
     fresh = services.safe("normal_host_training_readback", operation)
+    state.update(raw=fresh, fresh_sdk_readback=True)
+    from training_diagnostics import validate_pages
+
+    validate_pages(fresh)
     receipt = validate_unsampled_readback(
         fresh,
         task_id=envelope["task_id"],
@@ -166,15 +180,14 @@ def training_readback(root, case, values):
         config=case["config"],
         include_peak_gpu_bytes=include_peak,
     )
-    require(
-        "parameters" in fresh
-        and fresh["parameters"] == raw["parameters"]
-        and _event_comparison(fresh["events"]) == _event_comparison(raw["events"])
-        and receipt == expected,
-        "NORMAL_FRESH_UNSAMPLED_DRIFT",
-    )
+    require("parameters" in fresh, "NORMAL_FRESH_PARAMETERS")
     verify_native_service(root, fresh)
-    return {"receipt": receipt, "raw": fresh, "fresh_sdk_readback": True}
+    return {
+        "receipt": receipt,
+        "raw": fresh,
+        "fresh_sdk_readback": True,
+        "diagnostic": {"status": "verified", "authority": "AUXILIARY_ONLY"},
+    }
 
 
 def _training_comparison(value):
@@ -193,11 +206,7 @@ def accept(package, root, case, values):
         native == json.loads((root / "native-proof.json").read_bytes()), "NORMAL_HOST_NATIVE_DRIFT"
     )
     training = training_readback(root, case, values)
-    require(
-        _training_comparison(training)
-        == _training_comparison(json.loads((root / "training-fresh-readback.json").read_bytes())),
-        "NORMAL_HOST_SERVICE_DRIFT",
-    )
+    # Tracking snapshots remain diagnostic; native and private publication stay hard.
     publication = json.loads((root.parent / (root.name + "-publication.json")).read_bytes())
     require(
         publication["case"] == case and publication["schema"] == "normal-training-publication-v1",

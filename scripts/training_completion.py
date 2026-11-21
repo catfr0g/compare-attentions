@@ -1,4 +1,4 @@
-"""Order backup, full ClearML flush/readback, and final identity."""
+"""Preserve native backup and identity; ClearML is auxiliary diagnostic telemetry."""
 
 from __future__ import annotations
 
@@ -419,10 +419,27 @@ class CompletionTracker:
         self.backup, self.service = backup, service
         self.service.persist_readback = backup.record_scalar_readback
         self.task_id, self.receipt = None, None
+        self.diagnostics = []
+
+    def _service(self, method, *args):
+        from training_diagnostics import observe
+
+        from compare_attention.train.lifecycle import observe_failures
+
+        def operation():
+            # Auxiliary SDK failures must not consume the native primary-failure slot.
+            with observe_failures(None):
+                return getattr(self.service, method)(*args)
+
+        observed = observe(method, operation)
+        if observed["diagnostic"]["status"] == "warning":
+            if not any(row["diagnostic"]["phase"] == method for row in self.diagnostics):
+                self.diagnostics.append(observed)
+        return observed
 
     def start(self, config) -> None:
         self.backup.start(config)
-        self.service.start(config)
+        self._service("start", config)
         self.task_id = self.service.task_id
 
     def record_failure(self, report) -> None:
@@ -437,20 +454,20 @@ class CompletionTracker:
 
     def log_loss(self, loss, flops) -> None:
         self.backup.log_loss(loss, flops)
-        self.service.log_loss(loss, flops)
+        self._service("log_loss", loss, flops)
 
     def log_learning_rate(self, learning_rate, flops) -> None:
         callback = getattr(self.backup, "log_learning_rate", None)
         if callable(callback):
             callback(learning_rate, flops)
-        self.service.log_learning_rate(learning_rate, flops)
+        self._service("log_learning_rate", learning_rate, flops)
 
     def log_validation(self, loss, accuracy, flops) -> None:
         self.backup.log_validation(loss, accuracy, flops)
-        self.service.log_validation(loss, accuracy, flops)
+        self._service("log_validation", loss, accuracy, flops)
 
     def finish(self, result, model) -> None:
         self.backup.finish(result, model)
-        self.service.finish(result, model)
+        self._service("finish", result, model)
         self.receipt = self.service.receipt
         self.record_identity(result.provenance)

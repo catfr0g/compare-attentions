@@ -155,6 +155,7 @@ def worker(args, case, values):
             },
         )
         publisher.complete(case["checkpoint_steps"])
+        create_json(root / "training-diagnostics.json", {"warnings": tracker.diagnostics})
 
 
 def finish(args, case, values):
@@ -165,6 +166,10 @@ def finish(args, case, values):
     root = args.output
     verify_sources(args.package, root, case)
     proof = verify_native(root / "out", case)
+    if not case["engineering_only"]:
+        from unified_normal_host import task_quality
+
+        task_quality(args.package, root, case, args.data)
     create_json(root / "native-proof.json", proof)
     fresh = training_readback(root, case, values)
     create_json(root / "training-fresh-readback.json", fresh)

@@ -196,40 +196,59 @@ def replay(spec, recorded, inputs):
             and recorded["status"] == "ACCEPTED_UNIFIED_NORMAL",
             "UNIFIED_ORDINARY_TARGET_SCOPE",
         )
-        raw = read(root / "out/training-unsampled-readback.json")
+        raw = (
+            read(root / "out/training-unsampled-readback.json")
+            if (root / "out/training-unsampled-readback.json").exists()
+            else None
+        )
         producer = read(root / "training-task.json")
         training = recorded["training"]
+        legacy_reader = (
+            recorded["host_reader"]["release"] == "normal-host-readonly-equal-iteration-v2"
+        )
         require(
-            set(training) == {"receipt", "raw", "fresh_sdk_readback"}
-            and training["fresh_sdk_readback"] is True
-            and set(producer) == {"schema", "case", "task_id", "name", "identity", "receipt"}
+            set(producer) == {"schema", "case", "task_id", "name", "identity", "receipt"}
             and producer["schema"] == "normal-training-return-v1"
             and producer["case"] == case
             and producer["identity"] == read(root / "out/run_identity.json"),
             "UNIFIED_ORDINARY_PRODUCER_ENVELOPE",
         )
         require(read(root / "native-proof.json") == native, "UNIFIED_ORDINARY_NATIVE_PROOF")
-        include_peak = producer["receipt"]["required_counts"]["result/peak_gpu_bytes"] == 1
-        for observation in (raw, training["raw"]):
-            receipt = validate_unsampled_readback(
-                observation,
-                task_id=producer["task_id"],
-                updates=case["updates"],
-                validations=len(case["validation_steps"]),
-                config=case["config"],
-                include_peak_gpu_bytes=include_peak,
-            )
+        if legacy_reader:
             require(
-                receipt == producer["receipt"] == training["receipt"],
-                "UNIFIED_ORDINARY_TRAINING_RECEIPT",
+                set(training) == {"receipt", "raw", "fresh_sdk_readback"}
+                and training["fresh_sdk_readback"] is True,
+                "UNIFIED_ORDINARY_PRODUCER_ENVELOPE",
             )
-            verify_native_service(root, observation)
-        require(
-            raw_view(training["raw"]) == raw_view(raw)
-            and training_view(training)
-            == training_view(read(root / "training-fresh-readback.json")),
-            "UNIFIED_ORDINARY_TRAINING_RAW_JOIN",
-        )
+            include_peak = producer["receipt"]["required_counts"]["result/peak_gpu_bytes"] == 1
+            for observation in (raw, training["raw"]):
+                receipt = validate_unsampled_readback(
+                    observation,
+                    task_id=producer["task_id"],
+                    updates=case["updates"],
+                    validations=len(case["validation_steps"]),
+                    config=case["config"],
+                    include_peak_gpu_bytes=include_peak,
+                )
+                require(
+                    receipt == producer["receipt"] == training["receipt"],
+                    "UNIFIED_ORDINARY_TRAINING_RECEIPT",
+                )
+                verify_native_service(root, observation)
+            require(
+                raw_view(training["raw"]) == raw_view(raw)
+                and training_view(training)
+                == training_view(read(root / "training-fresh-readback.json")),
+                "UNIFIED_ORDINARY_TRAINING_RAW_JOIN",
+            )
+        else:
+            from unified_normal_host_view import RELEASE
+
+            require(recorded["host_reader"]["release"] == RELEASE, "UNIFIED_SUPPORTED_HOST_READER")
+            # Pinned observations retain warnings/raw data, but cannot grant scientific authority.
+            require(
+                training["diagnostic"]["authority"] == "AUXILIARY_ONLY", "UNIFIED_TRACKING_POLICY"
+            )
         manifest = read(snapshot / "snapshot.json")
         require(
             set(manifest) == {"case", "publications", "files"} and manifest["case"] == case,
@@ -300,7 +319,15 @@ def replay(spec, recorded, inputs):
             "files": manifest["files"],
         }
         lifecycle = assemble_lifecycle(case, source, native, training, publication["publications"])
-        inference = inference_observation(root, case, recorded["inference"])
+        inference = (
+            inference_observation(root, case, recorded["inference"])
+            if legacy_reader
+            else recorded["inference"]
+        )
+        if not legacy_reader:
+            require(
+                inference["diagnostic"]["authority"] == "AUXILIARY_ONLY", "UNIFIED_TRACKING_POLICY"
+            )
         expected = {
             "schema": "unified-normal-whole-acceptance-v1",
             "case": case,
@@ -316,7 +343,9 @@ def replay(spec, recorded, inputs):
             "lifecycle": lifecycle,
             "status": "ACCEPTED_UNIFIED_NORMAL",
             "whole_lifecycle_sha256": hashlib.sha256(canonical(lifecycle).encode()).hexdigest(),
-            "host_reader": reader_identity(),
+            "host_reader": reader_identity(
+                candidate=candidate, recorded=recorded["host_reader"], inputs=inputs
+            ),
         }
         require(canonical(recorded) == canonical(expected), "UNIFIED_ORDINARY_WHOLE_OBJECT")
     return expected

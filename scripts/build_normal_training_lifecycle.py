@@ -46,6 +46,9 @@ def stage_source(parent_archive, destination):
     members["seed202_pilot/cloud_completion.py"] = (
         Path(__file__).with_name("training_completion.py").read_bytes()
     )
+    members["training_diagnostics.py"] = (
+        Path(__file__).with_name("training_diagnostics.py").read_bytes()
+    )
     destination.mkdir(parents=True, exist_ok=False)
     for name, raw in members.items():
         target = destination / name
@@ -134,6 +137,8 @@ def build_package(parent_archive, repository, destination):
             saved.writestr(info, raw)
     scripts = [
         "training_completion",
+        "training_diagnostics",
+        "unified_normal_host",
         "normal_training_plan",
         "normal_training_native",
         "normal_training_worker",
@@ -191,6 +196,62 @@ def build_package(parent_archive, repository, destination):
         "normal-source-identity.json",
         json.dumps(identity, sort_keys=True, indent=2).encode() + b"\n",
     )
+    return destination
+
+
+def build_nonblocking_release(parent_package, repository, destination):
+    """Future-only lifecycle adapter; retain the authenticated complete scientific wheel."""
+    import shutil
+
+    from unified_normal_profiles import REMAINING_SIX, authenticate_package
+
+    parent_package, repository, destination = map(Path, (parent_package, repository, destination))
+    identity = authenticate_package(parent_package, REMAINING_SIX)
+    if destination.exists():
+        raise ValueError("NORMAL_SOURCE_PARENT_OR_CREATE_ONLY")
+    shutil.copytree(parent_package, destination)
+    for name in (
+        "training_completion",
+        "training_diagnostics",
+        "normal_training_worker",
+        "normal_training_acceptance",
+        "unified_normal_host",
+    ):
+        _write(
+            destination,
+            "src/" + name + ".py",
+            (repository / "scripts" / (name + ".py")).read_bytes(),
+        )
+    _write(
+        destination,
+        "inherited-source/training_diagnostics.py",
+        (repository / "scripts/training_diagnostics.py").read_bytes(),
+    )
+    _write(
+        destination,
+        "inherited-source/seed202_pilot/cloud_completion.py",
+        (repository / "scripts/training_completion.py").read_bytes(),
+    )
+    updated = {
+        **identity,
+        "tracking_policy": "AUXILIARY_NONBLOCKING_V1",
+        "completion_parent_identity_sha256": _pin(
+            (parent_package / "normal-source-identity.json").read_bytes()
+        )["sha256"],
+        "files": {
+            p.relative_to(destination).as_posix(): _pin(p.read_bytes())
+            for p in destination.rglob("*")
+            if p.is_file() and p.name != "normal-source-identity.json"
+        },
+    }
+    _write(
+        destination,
+        "normal-source-identity.json",
+        json.dumps(updated, sort_keys=True, indent=2).encode() + b"\n",
+    )
+    wheel = "compare_attention-0.1.0-py3-none-any.whl"
+    if (destination / wheel).read_bytes() != (parent_package / wheel).read_bytes():
+        raise ValueError("NORMAL_SCIENTIFIC_WHEEL_DRIFT")
     return destination
 
 

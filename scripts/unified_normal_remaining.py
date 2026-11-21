@@ -10,6 +10,7 @@ from unified_normal_contract import canonical, descriptor, digest, read, require
 from unified_normal_profiles import (
     FRESH_RESTART,
     REMAINING,
+    REMAINING_FOUR,
     REMAINING_SIX,
     authenticate_package,
     is_remaining_profile,
@@ -41,13 +42,26 @@ SIX_PLAN_PINS = {
 }
 
 
+FOUR_PLAN_PINS = {
+    "sorting-classic-seed404": "c02cc765bfab3779791c9784852ad1829ff7613e42c97e6ad84a404d24977752",
+    "sorting-deltanet-seed404": "2996b3c1d3d65d13f29e602bd1d04d45e0136c75498d86adb1395b09602a8cd3",
+    "mqar-k64-classic-seed404": "fdc76b8bec1541923c9e9993e273652fcf4bd2ddc352a05db71e69629b461876",
+    "mqar-k64-deltanet-seed404": "9cfcc86510d246f4ae8d6f0437df0a669e76021f15d295d6ff009d79993eaf5c",
+}
+
+
 def require_frozen_plan(case_id, path, profile=REMAINING):
     """The bounded release cannot be repurposed for a different recipe or nonce."""
     require_plan_pin(case_id, digest(path), profile)
 
 
 def require_plan_pin(case_id, pin, profile):
-    if profile == REMAINING_SIX:
+    if profile == REMAINING_FOUR:
+        require(
+            case_id in CASE_IDS[4:] and pin == FOUR_PLAN_PINS.get(case_id),
+            "REMAINING_FOUR_FROZEN_PLAN",
+        )
+    elif profile == REMAINING_SIX:
         require(
             case_id in CASE_IDS[2:] and case_id in SIX_PLAN_PINS and pin == SIX_PLAN_PINS[case_id],
             "REMAINING_SIX_FROZEN_PLAN",
@@ -129,6 +143,26 @@ def transition(candidate, case_id):
     }
 
 
+def prefix_policies(rows, profile):
+    """Only the repaired four-case release can consume the truthful case3 qualification."""
+    from unified_normal_contract import Policy
+
+    if profile == REMAINING_FOUR:
+        require(
+            all(
+                row["policy"]
+                == (Policy.COMPLETED_NORMAL if row["case_id"] == CASE_IDS[3] else Policy.ORDINARY)
+                for row in rows
+            ),
+            "REMAINING_QUALIFIED_CASE3_PREFIX_REQUIRED",
+        )
+    else:
+        require(
+            all(row["policy"] == Policy.ORDINARY for row in rows),
+            "REMAINING_ORDINARY_PREFIX_REQUIRED",
+        )
+
+
 def build_request(inputs, output):
     """Snapshot only the new group inputs; require genuine ordinary prefix rows."""
     from build_unified_normal_contract import pin, save
@@ -157,11 +191,10 @@ def build_request(inputs, output):
     require(type(rows) is list, "REMAINING_PREFIX_SCHEMA")
     for row in rows:
         require(
-            type(row) is dict
-            and set(row) == {"case_id", "policy", "path", "sha256", "replay"}
-            and row["policy"] == "AUTHENTIC_HOST_NATIVE_V2_FULL_REPLAY",
+            type(row) is dict and set(row) == {"case_id", "policy", "path", "sha256", "replay"},
             "REMAINING_ORDINARY_PREFIX_REQUIRED",
         )
+    prefix_policies(rows, profile)
     require_prefix(generation["case_id"], [row["case_id"] for row in rows])
     require_frozen_plan(generation["case_id"], inputs["normal_plan"], profile)
     output = Path(output).resolve()
@@ -181,7 +214,12 @@ def build_request(inputs, output):
     source.mkdir()
     for original in Path(__file__).parent.glob("unified_normal_*.py"):
         shutil.copyfile(original, source / original.name)
-    for helper in ("normal_remaining_scope", "normal_fresh_restart_scope"):
+    for helper in (
+        "normal_remaining_scope",
+        "normal_fresh_restart_scope",
+        "completed_normal_publication",
+        "training_diagnostics",
+    ):
         shutil.copyfile(Path(__file__).with_name(helper + ".py"), source / (helper + ".py"))
     files, roots = {}, set()
 
@@ -224,6 +262,19 @@ def build_request(inputs, output):
             include(path)
     for row in rows:
         spec = row["replay"]
+        if row["policy"] == "QUALIFIED_MQAR_DELTA303_COMPLETED_NATIVE_V1":
+            from completed_normal_publication import replay_completed
+
+            require(
+                profile == REMAINING_FOUR and row["case_id"] == CASE_IDS[3],
+                "REMAINING_QUALIFIED_CASE3_SCOPE",
+            )
+            replay_completed(spec, read(row["path"]))
+            tree(Path(spec["subject"]).parent)
+            include(spec["review"])
+            include(row["path"])
+            require(digest(row["path"]) == row["sha256"], "REMAINING_PREFIX_PIN")
+            continue
         require(
             set(spec) == {"profile", "source_request", "result", "data", "snapshot", "index"}
             and is_remaining_profile(spec["profile"]),

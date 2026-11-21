@@ -316,6 +316,8 @@ def build(inputs, normal_archive, destination):
     host = payload / "source/src"
     for name in (
         "unified_normal_contract",
+        "completed_normal_publication",
+        "training_diagnostics",
         "unified_normal_live",
         "unified_normal_replay",
         "unified_normal_source",

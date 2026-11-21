@@ -18,6 +18,7 @@ class Policy(StrEnum):
     SORTING_CLASSIC = "QUALIFIED_SORTING_CLASSIC_TAIL_V1"
     SORTING_DELTA = "QUALIFIED_SORTING_DELTA_TAIL_V1"
     MQAR_CONTINUATION = "QUALIFIED_MQAR_CONTINUATION_TAIL_V1"
+    COMPLETED_NORMAL = "QUALIFIED_MQAR_DELTA303_COMPLETED_NATIVE_V1"
 
 
 # This is an authority-approved historical case list, not task dispatch logic.
@@ -56,6 +57,7 @@ def valid_evidence_row(row):
         return (row["case_id"], row["acceptance_sha256"]) == QUALIFIED[policy]
     return (
         type(row["case_id"]) is str
+        and (policy != Policy.COMPLETED_NORMAL or row["case_id"] == "mqar-k64-deltanet-seed303")
         and row["case_id"] not in {case for case, _sha in QUALIFIED.values()}
         and type(row["acceptance_sha256"]) is str
         and len(row["acceptance_sha256"]) == 64
@@ -124,6 +126,12 @@ def descriptor(candidate):
             "UNIFIED_PREDECESSOR_SCHEMA",
         )
         policy = Policy(row["policy"])
+        if policy == Policy.COMPLETED_NORMAL:
+            require(
+                value["normal"]["profile"] == "REMAINING_FOUR_NONBLOCKING_TRACKING_V1"
+                and row["case_id"] == "mqar-k64-deltanet-seed303",
+                "UNIFIED_COMPLETED_CASE3_ONLY",
+            )
         if policy in QUALIFIED:
             require(
                 (row["case_id"], row["sha256"]) == QUALIFIED[policy],
@@ -151,10 +159,9 @@ def descriptor(candidate):
         require_plan_pin(
             value["run"]["id"], value["run"]["plan_sha256"], value["normal"]["profile"]
         )
-        require(
-            all(row["policy"] == Policy.ORDINARY for row in value["predecessors"]),
-            "REMAINING_ORDINARY_PREFIX_REQUIRED",
-        )
+        from unified_normal_remaining import prefix_policies
+
+        prefix_policies(value["predecessors"], value["normal"]["profile"])
     return path, value
 
 

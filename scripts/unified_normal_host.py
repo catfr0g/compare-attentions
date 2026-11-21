@@ -248,15 +248,22 @@ def consume(package, root, case, values, data, *, snapshot, accept=False):
     from normal_training_acceptance import training_readback, verify_sources
     from normal_training_native import verify_native
     from normal_training_plan import canonical
+    from training_diagnostics import observe
     from unified_normal_host_view import lifecycle as assemble_lifecycle
-    from unified_normal_host_view import reader_identity, training_view
+    from unified_normal_host_view import reader_identity
     from unified_normal_publications import publication_readback
 
     source = verify_sources(package, root, case)
     native = verify_native(Path(root) / "out", case)
-    training = training_readback(root, case, values)
+    training = observe(
+        "normal_host_training_readback",
+        lambda: training_readback(root, case, values),
+        {"receipt": None, "raw": None, "fresh_sdk_readback": False},
+    )
     task = task_quality(package, root, case, data)
-    inference = inference_readback(root, case, values)
+    inference = observe(
+        "normal_host_inference_readback", lambda: inference_readback(root, case, values)
+    )
     publication = publication_readback(root, case, values, snapshot)
     result = {
         "schema": "unified-normal-host-observation-v1",
@@ -275,11 +282,7 @@ def consume(package, root, case, values, data, *, snapshot, accept=False):
     }
     if accept:
         require(native == read(Path(root) / "native-proof.json"), "NORMAL_HOST_NATIVE_DRIFT")
-        require(
-            training_view(training)
-            == training_view(read(Path(root) / "training-fresh-readback.json")),
-            "NORMAL_HOST_SERVICE_DRIFT",
-        )
+        # Fresh diagnostics are retained verbatim, never equated with an older SDK snapshot.
         lifecycle = assemble_lifecycle(case, source, native, training, publication["publications"])
         result.update(
             schema="unified-normal-whole-acceptance-v1",

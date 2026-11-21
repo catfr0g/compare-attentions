@@ -86,6 +86,11 @@ def replay(request, case_id):
                         digest(release / "manifest.json"),
                     )
                     result = genuine_replay(spec["spec"])
+            elif policy == Policy.COMPLETED_NORMAL:
+                from completed_normal_publication import replay_completed
+
+                require(case_id == "mqar-k64-deltanet-seed303", "UNIFIED_COMPLETED_CASE3_ONLY")
+                result = replay_completed(spec, read(row["path"]), value)
             else:
                 require("profile" in spec, "UNIFIED_ORDINARY_PROFILE_REQUIRED")
                 if spec["profile"] in PROFILES:
@@ -104,7 +109,9 @@ def replay(request, case_id):
 
                     result = replay_acceptance(Path(row["path"]), case_id)
     require(canonical(result) == canonical(read(row["path"])), "UNIFIED_WHOLE_ACCEPTANCE_EQUALITY")
-    if policy != Policy.ORDINARY:
+    if policy == Policy.COMPLETED_NORMAL:
+        require(result["next_launch_authorized"] is False, "UNIFIED_PRESERVE_AUTHORITY")
+    elif policy != Policy.ORDINARY:
         require(result["later_pilots_authorized"] is False, "UNIFIED_PRESERVE_AUTHORITY")
     return VerifiedPredecessor(
         case_id,

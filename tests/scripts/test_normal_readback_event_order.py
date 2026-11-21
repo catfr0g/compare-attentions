@@ -198,11 +198,7 @@ def test_host_accepts_only_equal_iteration_permutation(portable_finish, monkeypa
             }
 
     monkeypatch.setattr(quality_services, "HFTransport", FixtureHFTransport)
-    if mutation is not None:
-        with pytest.raises(ValueError, match="^NORMAL_HOST_SERVICE_DRIFT$"):
-            acceptance.accept(root, root, envelope["case"], {})
-        assert not (root.parent / "run-normal-accepted.json").exists()
-        return
+    # Historical SDK snapshot differences are retained, not scientific rejection gates.
     result = acceptance.accept(root, root, envelope["case"], {})
     assert result["status"] == "ACCEPTED_NORMAL_LIFECYCLE"
     assert result["training"] == envelope["receipt"]
@@ -255,18 +251,31 @@ def test_portable_producer_comparison(portable_finish, monkeypatch, mutation, gu
         fresh["events"] = fresh["events"][5:] + fresh["events"][:5]
     elif mutation == "parameters":
         fresh["parameters"]["events"] = "changed"
+    fresh["pages"][0]["events"] = copy.deepcopy(fresh["events"])
     original = copy.deepcopy(fresh)
     monkeypatch.setattr(
         training_completion.TrainingServiceTracker,
         "_production_readback",
         staticmethod(lambda _task: fresh),
     )
-    if guard:
-        with pytest.raises(ValueError, match="^" + guard + "$"):
-            acceptance.training_readback(root, envelope["case"], {})
+    warning = mutation in {
+        "value",
+        "axis",
+        "variant",
+        "missing",
+        "added",
+        "duplicate_replacement",
+        "parameters",
+    }
+    if warning:
+        with pytest.warns(RuntimeWarning, match="auxiliary tracking"):
+            accepted = acceptance.training_readback(root, envelope["case"], {})
+        assert accepted["diagnostic"]["status"] == "warning"
+        assert accepted["receipt"] is None
     else:
         accepted = acceptance.training_readback(root, envelope["case"], {})
-        assert accepted["raw"] is fresh
+        assert accepted["diagnostic"]["status"] == "verified"
         assert accepted["receipt"] == envelope["receipt"]
+    assert accepted["raw"] is fresh
     assert fresh == original
     assert json.loads((root / "out/training-unsampled-readback.json").read_bytes()) == stored

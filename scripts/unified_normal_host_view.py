@@ -5,7 +5,7 @@ import json
 from itertools import groupby
 from pathlib import Path
 
-RELEASE = "normal-host-readonly-equal-iteration-v2"
+RELEASE = "normal-host-readonly-nonblocking-tracking-v3"
 
 
 def canonical(value):
@@ -89,8 +89,43 @@ def lifecycle(case, source, native, training, publications):
     }
 
 
-def reader_identity():
-    """Pin the new HOST consumer independently of the immutable scientific producer."""
+def reader_identity(*, candidate=None, recorded=None, inputs=None):
+    """Pin V3 separately; authenticate V2 against its actual immutable reader files."""
+    if (
+        recorded is not None
+        and recorded.get("release") == "normal-host-readonly-equal-iteration-v2"
+    ):
+        root = Path(candidate) / "payload/source/src"
+        names = {
+            "unified_normal_host.py",
+            "unified_normal_host_view.py",
+            "unified_normal_ordinary.py",
+            "unified_normal_publications.py",
+        }
+        if (
+            set(recorded) != {"release", "purpose", "files"}
+            or recorded["purpose"] != "posttraining-readonly-observer-client"
+            or set(recorded["files"]) != names
+        ):
+            raise ValueError("UNIFIED_LEGACY_READER_BYTES")
+        roots = {root}
+        if inputs is not None:
+            roots = {
+                Path(path).parent
+                for path, expected in inputs["files"].items()
+                if Path(path).name == "unified_normal_host_view.py"
+                and expected["sha256"] == recorded["files"]["unified_normal_host_view.py"]
+            }
+        for selected_root in roots:
+            if all(
+                (selected_root / name).is_file()
+                and (inputs is None or str((selected_root / name).resolve()) in inputs["files"])
+                and hashlib.sha256((selected_root / name).read_bytes()).hexdigest()
+                == recorded["files"][name]
+                for name in names
+            ):
+                return recorded
+        raise ValueError("UNIFIED_LEGACY_READER_BYTES")
     root = Path(__file__).parent
     return {
         "release": RELEASE,

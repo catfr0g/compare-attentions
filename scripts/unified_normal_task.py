@@ -12,6 +12,30 @@ from pathlib import Path, PurePosixPath
 from normal_launch_diagnostics import NormalArgumentParser, normal_cli
 
 
+def publish_tracking(args, case, report):
+    """Publish auxiliary inference telemetry without gating saved native quality."""
+    from training_diagnostics import observe
+
+    def operation():
+        from quality_inherit import leaf
+
+        services = leaf("services")
+        values = services.credentials(args.private, rank=0)
+        from seed202_pilot.cloud_services import publish_task
+
+        envelope = json.loads((args.output / "training-task.json").read_bytes())
+        service = services.ServiceTracker(values, envelope["name"])
+        provenance = json.loads((args.output / "out/run_identity.json").read_bytes())
+        return publish_task(
+            service, report, case["config"], provenance, args.output / "task-val.json"
+        )
+
+    observed = observe("normal_task_tracking", operation)
+    if observed["diagnostic"]["status"] == "verified":
+        return {key: value for key, value in observed.items() if key != "diagnostic"}
+    return observed
+
+
 def main(argv=None):
     parser = NormalArgumentParser(allow_abbrev=False)
     for name in ("package", "plan", "recipe", "data", "private", "output", "review", "decision"):
@@ -83,7 +107,6 @@ def main(argv=None):
         from normal_training_native import verify_native
         from normal_training_worker import imported_sources
         from seed202_pilot.cloud_evaluate import evaluate_target
-        from seed202_pilot.cloud_services import publish_task
         from seed202_pilot.contract import require_authorized_case
 
         proof = verify_native(args.output / "out", case)
@@ -94,16 +117,9 @@ def main(argv=None):
             "UNIFIED_TASK_NORMAL_WEIGHTS_JOIN",
         )
         create_json(args.output / "task-val.json", report)
-        services = leaf("services")
-        values = services.credentials(args.private, rank=0)
-        envelope = json.loads((args.output / "training-task.json").read_bytes())
-        service = services.ServiceTracker(values, envelope["name"])
-        provenance = json.loads((args.output / "out/run_identity.json").read_bytes())
-        readback = publish_task(
-            service, report, case["config"], provenance, args.output / "task-val.json"
-        )
-        create_json(args.output / "task-clearml-readback.json", readback)
         create_json(args.output / "task-source.json", imported_sources(args.package))
+        readback = publish_tracking(args, case, report)
+        create_json(args.output / "task-clearml-readback.json", readback)
     finally:
         shutil.rmtree(root)
     return 0
