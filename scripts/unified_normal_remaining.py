@@ -10,6 +10,7 @@ from unified_normal_contract import canonical, descriptor, digest, read, require
 from unified_normal_profiles import (
     FRESH_RESTART,
     REMAINING,
+    REMAINING_SIX,
     authenticate_package,
     is_remaining_profile,
     selected,
@@ -28,6 +29,17 @@ PLAN_PINS = {
     "mqar-k64-deltanet-seed404": "75806539c9953a9bef64235495862726269f31bbc872eb4222a80874f4274bc3",
 }
 
+# New source115 subjects for only the original six unstarted fresh cases.
+# Historical d7 and the separately authorized Delta303 restart stay immutable.
+SIX_PLAN_PINS = {
+    "mqar-k64-classic-seed303": "e05197c1f90656796e84e6beed90116655e4648f16af401f8f189d26094a69c9",
+    "mqar-k64-deltanet-seed303": "c8ed3d2396374fb29091e97922f3b7fb7033cec080609d9ef3a1c6e5276e2fa6",
+    "sorting-classic-seed404": "c8f89f0222deb046d834a99df51ca818d135f9e4e361218236818a76fde53571",
+    "sorting-deltanet-seed404": "7c46d9c56285cc18b88cf656a0026eab83962249511377b3071d7f1398afdb5e",
+    "mqar-k64-classic-seed404": "a28a2965f6bea46a652fa02569ce3854b9859dd5837d1b37d3bfadfe83526121",
+    "mqar-k64-deltanet-seed404": "edb3609e9f298983efbf5bc52cc46c717ae73ca79cf17174e389e7133e148af9",
+}
+
 
 def require_frozen_plan(case_id, path, profile=REMAINING):
     """The bounded release cannot be repurposed for a different recipe or nonce."""
@@ -35,7 +47,12 @@ def require_frozen_plan(case_id, path, profile=REMAINING):
 
 
 def require_plan_pin(case_id, pin, profile):
-    if profile == FRESH_RESTART:
+    if profile == REMAINING_SIX:
+        require(
+            case_id in CASE_IDS[2:] and case_id in SIX_PLAN_PINS and pin == SIX_PLAN_PINS[case_id],
+            "REMAINING_SIX_FROZEN_PLAN",
+        )
+    elif profile == FRESH_RESTART:
         from normal_fresh_restart_scope import frozen_plan
 
         frozen_plan(case_id, pin)

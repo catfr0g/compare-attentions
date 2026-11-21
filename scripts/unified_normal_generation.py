@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 from unified_normal_contract import canonical, digest, read, require
 from unified_normal_profiles import (
     FRESH_RESTART,
+    REMAINING_SIX,
     REPAIRED,
     authenticate_review,
     is_remaining_profile,
@@ -52,6 +53,8 @@ def intent_value(value, profile_name):
     )
     from normal_remaining_scope import CASE_IDS
 
+    if profile_name == REMAINING_SIX:
+        require(value["case_id"] in CASE_IDS[2:], "REMAINING_SIX_CASE_SCOPE")
     require(
         (
             (profile_name == REPAIRED and value["case_id"] == CASE)
