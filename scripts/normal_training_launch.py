@@ -165,8 +165,7 @@ def main(argv=None):
                 "--local-addr=127.0.0.1",
             ]
         child = base + [
-            "-m",
-            "torch.distributed.run",
+            str(root / "normal_torchrun_entry.py"),
             "--nnodes=1",
             "--nproc-per-node=2",
             *rendezvous,

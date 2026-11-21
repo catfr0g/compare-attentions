@@ -141,15 +141,15 @@ def descriptor(candidate):
             "UNIFIED_PREDECESSOR_INPUT_PIN",
         )
     require(len(ids) == len(set(ids)), "UNIFIED_DUPLICATE_PREDECESSOR")
-    from unified_normal_profiles import REMAINING
+    from unified_normal_profiles import is_remaining_profile
 
-    if value["normal"]["profile"] == REMAINING:
+    if is_remaining_profile(value["normal"]["profile"]):
         from normal_remaining_scope import require_prefix
-        from unified_normal_remaining import PLAN_PINS
+        from unified_normal_remaining import require_plan_pin
 
         require_prefix(value["run"]["id"], ids)
-        require(
-            value["run"]["plan_sha256"] == PLAN_PINS[value["run"]["id"]], "REMAINING_FROZEN_PLAN"
+        require_plan_pin(
+            value["run"]["id"], value["run"]["plan_sha256"], value["normal"]["profile"]
         )
         require(
             all(row["policy"] == Policy.ORDINARY for row in value["predecessors"]),

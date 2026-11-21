@@ -7,7 +7,13 @@ from pathlib import Path
 
 from normal_remaining_scope import CASE_IDS, case_rows, permission, require_prefix
 from unified_normal_contract import canonical, descriptor, digest, read, require
-from unified_normal_profiles import REMAINING, authenticate_package, selected
+from unified_normal_profiles import (
+    FRESH_RESTART,
+    REMAINING,
+    authenticate_package,
+    is_remaining_profile,
+    selected,
+)
 
 # Exact eight actual nonengineering review subjects, including recipe/data/runtime,
 # source, caller nonce and original permission. Not approvals or future overrides.
@@ -23,9 +29,21 @@ PLAN_PINS = {
 }
 
 
-def require_frozen_plan(case_id, path):
+def require_frozen_plan(case_id, path, profile=REMAINING):
     """The bounded release cannot be repurposed for a different recipe or nonce."""
-    require(case_id in PLAN_PINS and digest(path) == PLAN_PINS[case_id], "REMAINING_FROZEN_PLAN")
+    require_plan_pin(case_id, digest(path), profile)
+
+
+def require_plan_pin(case_id, pin, profile):
+    if profile == FRESH_RESTART:
+        from normal_fresh_restart_scope import frozen_plan
+
+        frozen_plan(case_id, pin)
+    else:
+        require(
+            profile == REMAINING and case_id in PLAN_PINS and pin == PLAN_PINS[case_id],
+            "REMAINING_FROZEN_PLAN",
+        )
 
 
 def integrate_group(source):
@@ -66,8 +84,9 @@ def transition(candidate, case_id):
 
     _path, request = descriptor(candidate)
     plan = read(Path(candidate) / "payload/unified/normal-plan.json")
-    generation = intent_value(plan["generation"], REMAINING)
-    require_frozen_plan(case_id, Path(candidate) / "payload/unified/normal-plan.json")
+    profile = request["normal"]["profile"]
+    generation = intent_value(plan["generation"], profile)
+    require_frozen_plan(case_id, Path(candidate) / "payload/unified/normal-plan.json", profile)
     require(case_id == generation["case_id"] == request["run"]["id"], "REMAINING_TRANSITION_CASE")
     index = require_prefix(case_id, [r["case_id"] for r in request["predecessors"]])
     return {
@@ -79,6 +98,17 @@ def transition(candidate, case_id):
         "historical_acceptances_modified": False,
         "historical_completion_fabricated": False,
         "transition_permission": "EXPLICIT_USER_PERMISSION_EXACT_EIGHT_SEQUENTIAL",
+        **(
+            {
+                "fresh_restart_consent_sha256": generation["restart"]["sha256"],
+                "failed_kernel_preserved": 146268145,
+                "attempt_limit": 1,
+                "resume_permitted": False,
+                "stop_on_new_failure": True,
+            }
+            if profile == FRESH_RESTART
+            else {}
+        ),
     }
 
 
@@ -103,8 +133,9 @@ def build_request(inputs, output):
         },
         "REMAINING_BUILD_INPUTS",
     )
-    require(inputs["source_profile"] == REMAINING, "REMAINING_SOURCE_PROFILE")
-    generation = intent(inputs["generation"], REMAINING)
+    profile = inputs["source_profile"]
+    require(is_remaining_profile(profile), "REMAINING_SOURCE_PROFILE")
+    generation = intent(inputs["generation"], profile)
     rows = inputs["predecessors"]
     require(type(rows) is list, "REMAINING_PREFIX_SCHEMA")
     for row in rows:
@@ -115,11 +146,11 @@ def build_request(inputs, output):
             "REMAINING_ORDINARY_PREFIX_REQUIRED",
         )
     require_prefix(generation["case_id"], [row["case_id"] for row in rows])
-    require_frozen_plan(generation["case_id"], inputs["normal_plan"])
+    require_frozen_plan(generation["case_id"], inputs["normal_plan"], profile)
     output = Path(output).resolve()
     require(not output.exists(), "UNIFIED_CREATE_ONLY")
     normal = Path(inputs["normal_package"])
-    authenticate_package(normal, REMAINING)
+    authenticate_package(normal, profile)
     runtime_path = Path(inputs["runtime_record"])
     require(digest(runtime_path) == RUNTIME_RECORD, "UNIFIED_AUTHENTIC_RUNTIME_REFERENCE")
     fields = ["completed", 0, "acceptance", "timing", "metadata", "execution_runtime"]
@@ -133,9 +164,8 @@ def build_request(inputs, output):
     source.mkdir()
     for original in Path(__file__).parent.glob("unified_normal_*.py"):
         shutil.copyfile(original, source / original.name)
-    shutil.copyfile(
-        Path(__file__).with_name("normal_remaining_scope.py"), source / "normal_remaining_scope.py"
-    )
+    for helper in ("normal_remaining_scope", "normal_fresh_restart_scope"):
+        shutil.copyfile(Path(__file__).with_name(helper + ".py"), source / (helper + ".py"))
     files, roots = {}, set()
 
     def include(path):
@@ -159,6 +189,8 @@ def build_request(inputs, output):
     for key in ("normal_case", "runtime_record", "generation", "normal_plan", "normal_recipe"):
         include(inputs[key])
     include(generation["authorization"]["path"])
+    if profile == FRESH_RESTART:
+        include(generation["restart"]["path"])
     tree(normal)
     tree(source)
     data = Path(case["config"]["data"]).resolve()
@@ -177,7 +209,7 @@ def build_request(inputs, output):
         spec = row["replay"]
         require(
             set(spec) == {"profile", "source_request", "result", "data", "snapshot", "index"}
-            and spec["profile"] == REMAINING,
+            and is_remaining_profile(spec["profile"]),
             "REMAINING_PREFIX_REPLAY_SCHEMA",
         )
         previous = Path(spec["source_request"]).parents[2]
@@ -204,9 +236,9 @@ def build_request(inputs, output):
             "run": case,
             "predecessors": rows,
             "normal": {
-                "profile": REMAINING,
+                "profile": profile,
                 "package": str(normal),
-                "source_identity_sha256": selected(REMAINING)["source"],
+                "source_identity_sha256": selected(profile)["source"],
                 "wheel_sha256": WHEEL,
                 "runtime_record": str(runtime_path),
                 "runtime_record_sha256": RUNTIME_RECORD,
@@ -223,11 +255,12 @@ def build_request(inputs, output):
     return output
 
 
-def deployment(payload, plan, run, generation):
+def deployment(payload, plan, run, generation, profile=REMAINING):
     """Construct a genuinely fresh deployment, never inherit resume or approvals."""
-    from unified_normal_generation import namespace
+    from unified_normal_generation import intent_value, namespace
     from unified_normal_operator import save
 
+    intent_value(generation, profile)
     permission(generation["authorization"])
     index = CASE_IDS.index(run["id"])
     row = case_rows()[index]
@@ -251,7 +284,7 @@ def deployment(payload, plan, run, generation):
         "family": row["family"],
         "seed": row["seed"],
         "mode": "FRESH_TWO_STAGE",
-        "source_profile": REMAINING,
+        "source_profile": profile,
         "nonce": generation["nonce"],
         **targets,
         "order": index,

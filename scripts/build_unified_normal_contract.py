@@ -6,7 +6,7 @@ import shutil
 from pathlib import Path
 
 from unified_normal_contract import Policy, canonical, digest, read, require
-from unified_normal_profiles import REMAINING, REPAIRED, authenticate_package, selected
+from unified_normal_profiles import REPAIRED, authenticate_package, is_remaining_profile, selected
 from unified_normal_source import PROFILE, RUNTIME_RECORD, WHEEL
 
 
@@ -29,7 +29,7 @@ def save(path, value):
 def build(inputs, output):
     """Snapshot declared source/replay bytes without duplicating scientific arrays."""
     profile_name = inputs.get("source_profile", PROFILE)
-    if profile_name == REMAINING:
+    if is_remaining_profile(profile_name):
         from unified_normal_remaining import build_request
 
         return build_request(inputs, output)

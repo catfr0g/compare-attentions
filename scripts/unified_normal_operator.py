@@ -280,14 +280,14 @@ def build(inputs, normal_archive, destination):
     parent = Path(inputs["sorting_candidate"]) / "sorting-mqar-seed202-pilot-v1.zip"
     unpack(parent, destination / "payload", PARENT)
     normal = destination / "payload/normal-package"
-    from unified_normal_profiles import REMAINING, REPAIRED, authenticate_package
+    from unified_normal_profiles import REPAIRED, authenticate_package, is_remaining_profile
     from unified_normal_profiles import selected as source_profile
 
     profile_name = inputs.get("source_profile", PROFILE)
     release = source_profile(profile_name)
     unpack(normal_archive, normal, release["archive"], release["prefix"])
     authenticate_package(normal, profile_name)
-    if profile_name in {REPAIRED, REMAINING}:
+    if profile_name == REPAIRED or is_remaining_profile(profile_name):
         require("generation" in inputs, "UNIFIED_GENERATION_REQUIRED")
     request_inputs = {
         k: v
@@ -297,7 +297,7 @@ def build(inputs, normal_archive, destination):
             {"normal_review", "normal_decision"}
             | (
                 {"normal_plan", "normal_recipe"}
-                if profile_name not in {REPAIRED, REMAINING}
+                if profile_name != REPAIRED and not is_remaining_profile(profile_name)
                 else set()
             )
         )
@@ -329,10 +329,11 @@ def build(inputs, normal_archive, destination):
         "unified_normal_ordinary",
         "unified_normal_remaining",
         "normal_remaining_scope",
+        "normal_fresh_restart_scope",
     ):
         shutil.copyfile(Path(__file__).with_name(name + ".py"), host / (name + ".py"))
     integrate(host / "seed202_pilot", profile_name)
-    if profile_name == REMAINING:
+    if is_remaining_profile(profile_name):
         from unified_normal_remaining import integrate_group
 
         integrate_group(host / "seed202_pilot")
@@ -356,12 +357,12 @@ def build(inputs, normal_archive, destination):
     )
     plan = read(payload / "PLAN-UNAPPROVED.json")
     selected = request["run"]
-    if profile_name == REMAINING:
+    if is_remaining_profile(profile_name):
         from unified_normal_generation import intent
         from unified_normal_remaining import deployment as fresh_deployment
 
         deployment = fresh_deployment(
-            payload, plan, selected, intent(inputs["generation"], profile_name)
+            payload, plan, selected, intent(inputs["generation"], profile_name), profile_name
         )
     else:
         require(selected["id"] == "mqar-k64-deltanet-seed202", "UNIFIED_CURRENT_AUTHORIZATION")
@@ -390,7 +391,7 @@ def build(inputs, normal_archive, destination):
             }
         },
     }
-    if profile_name not in {REPAIRED, REMAINING}:
+    if profile_name != REPAIRED and not is_remaining_profile(profile_name):
         save(payload / "unified/normal-plan.json", normal_plan)
     from unified_normal_authority import SCHEMA, validate
 
@@ -443,6 +444,7 @@ def build(inputs, normal_archive, destination):
     maintained = [
         *repository.joinpath("scripts").glob("unified_normal_*.py"),
         repository / "scripts/normal_remaining_scope.py",
+        repository / "scripts/normal_fresh_restart_scope.py",
         repository / "scripts/build_unified_normal_contract.py",
         repository / "docs/unified-normal-live-window.md",
         repository / "docs/unified-normal-generation.md",

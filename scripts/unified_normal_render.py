@@ -8,7 +8,7 @@ from unified_normal_contract import digest, require
 from unified_normal_source import service_names
 
 MAIN = """def normal_main(mount_root, working, package_root, started):
-    global NormalDiagnostics
+    global NormalDiagnostics, elastic_observer
     driver = driver_directory()
     inspect_hardware(driver)
     operator_archive = resolve_mount(
@@ -49,6 +49,11 @@ MAIN = """def normal_main(mount_root, working, package_root, started):
     diagnostic_module = importlib.util.module_from_spec(diagnostic_spec)
     diagnostic_spec.loader.exec_module(diagnostic_module)
     NormalDiagnostics = diagnostic_module.NormalDiagnostics
+    elastic_spec = importlib.util.spec_from_file_location(
+        "normal_torchrun_entry", package / "normal_torchrun_entry.py"
+    )
+    elastic_observer = importlib.util.module_from_spec(elastic_spec)
+    elastic_spec.loader.exec_module(elastic_observer)
     plan = json.loads((release / "normal-plan.json").read_bytes())
     if plan["engineering_only"] is not True:
         authority = {}
@@ -106,9 +111,12 @@ MAIN = """def normal_main(mount_root, working, package_root, started):
             "--review", str(release / "authority/independent-review.json"),
             "--decision", str(release / "authority/execution-decision.json"),
         ]
-        diagnostics.supervise(lambda command=command: bounded_run(
-            command, env, package,
-            BINDING["kernel_seconds"] - (time.monotonic() - started)))
+        elastic_observer.observe(
+            diagnostics,
+            lambda diagnostics=diagnostics, command=command: diagnostics.supervise(
+                lambda: bounded_run(
+                    command, env, package,
+                    BINDING["kernel_seconds"] - (time.monotonic() - started))))
         if phase == "worker":
             task = [
                 str(uv), "run", "--offline", "--no-project", "--no-sync", "--python", str(python),
@@ -217,6 +225,10 @@ def render(metadata, deployment, payload):
         )
         if context.valid(primary, primary.get("stage"), primary.get("rank")):
             report["primary"] = primary
+    if "elastic_observer" in globals():
+        facts = elastic_observer.public(error, BINDING["normal_source_sha256"], BINDING["case_id"])
+        if facts is not None:
+            report["elastic_failure"] = facts
     return report
 
 

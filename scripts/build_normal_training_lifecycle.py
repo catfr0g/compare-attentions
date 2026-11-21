@@ -152,11 +152,10 @@ def build_package(parent_archive, repository, destination):
         "normal_driver_environment.py",
         (repository / "scripts/normal_driver_environment.py").read_bytes(),
     )
-    _write(
-        destination,
-        "normal_launch_diagnostics.py",
-        (repository / "scripts/normal_launch_diagnostics.py").read_bytes(),
-    )
+    for helper in ("normal_launch_diagnostics", "normal_torchrun_entry"):
+        _write(
+            destination, helper + ".py", (repository / "scripts" / (helper + ".py")).read_bytes()
+        )
     _write(
         destination,
         "worker.py",
@@ -192,6 +191,46 @@ def build_package(parent_archive, repository, destination):
         "normal-source-identity.json",
         json.dumps(identity, sort_keys=True, indent=2).encode() + b"\n",
     )
+    return destination
+
+
+def build_observer_release(parent_package, repository, destination):
+    """Derive only launch observability from the authenticated remaining release."""
+    import shutil
+
+    from unified_normal_profiles import REMAINING, authenticate_package
+
+    parent_package, repository, destination = map(Path, (parent_package, repository, destination))
+    identity = authenticate_package(parent_package, REMAINING)
+    if destination.exists():
+        raise ValueError("NORMAL_SOURCE_PARENT_OR_CREATE_ONLY")
+    shutil.copytree(parent_package, destination)
+    for name, target in (
+        ("normal_training_launch.py", "setup.py"),
+        ("normal_torchrun_entry.py", "normal_torchrun_entry.py"),
+    ):
+        _write(destination, target, (repository / "scripts" / name).read_bytes())
+    files = {
+        p.relative_to(destination).as_posix(): _pin(p.read_bytes())
+        for p in destination.rglob("*")
+        if p.is_file() and p.name != "normal-source-identity.json"
+    }
+    updated = {
+        **identity,
+        "observability_parent_identity_sha256": _pin(
+            (parent_package / "normal-source-identity.json").read_bytes()
+        )["sha256"],
+        "files": files,
+    }
+    _write(
+        destination,
+        "normal-source-identity.json",
+        json.dumps(updated, sort_keys=True, indent=2).encode() + b"\n",
+    )
+    if (destination / "compare_attention-0.1.0-py3-none-any.whl").read_bytes() != (
+        parent_package / "compare_attention-0.1.0-py3-none-any.whl"
+    ).read_bytes():
+        raise ValueError("NORMAL_OBSERVER_SCIENCE_DRIFT")
     return destination
 
 

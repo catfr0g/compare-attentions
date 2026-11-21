@@ -7,7 +7,14 @@ from unified_normal_contract import digest, read, require
 LEGACY = "REPAIRED_NORMAL_V1"
 REPAIRED = "REPAIRED_NORMAL_707_V1"
 REMAINING = "REMAINING_NORMAL_FIXED_V1"
+FRESH_RESTART = "SORTING_DELTA303_FRESH_RESTART_V1"
 PROFILES = {
+    FRESH_RESTART: {
+        "source": "115df61b5390f324fd06fc81bb091d04a0bce74dfa8587be5aa560b01ed27e2e",
+        "archive": "a283729bc9c21aca47c9d5fd66515cfd2ec3b4c35bbd231576668a21f932114d",
+        "prefix": "normal-package/",
+        "review_policy": "EXTERNAL_TYPED_NORMAL_SOURCE_AND_PLAN",
+    },
     REMAINING: {
         "source": "d7e97c813df77ee30b613c77aaf0b8a47934211446116e9bd58ec48b6f8250a0",
         "archive": "3128c670a9a86ad2a01a1f31367f0d64eccbe191a71611fdd911a66df31a3117",
@@ -26,6 +33,11 @@ PROFILES = {
         "technical_review": "03675a71760db3c21a51c58779e562dc99b834b36188de3f646af6c800dccd1e",
     },
 }
+
+
+def is_remaining_profile(name):
+    """Finite old/new producer coexistence; never arbitrary source profiles."""
+    return name in (REMAINING, FRESH_RESTART)
 
 
 def selected(name=LEGACY):

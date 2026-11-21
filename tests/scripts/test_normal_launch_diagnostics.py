@@ -78,6 +78,8 @@ def tiny_kernel(
     monkeypatch,
     *,
     failing_phase="worker",
+    hard_exit=False,
+    pre_main_error=False,
     setup_failure=False,
     layout="flat",
     task="mqar-k64",
@@ -86,6 +88,7 @@ def tiny_kernel(
     deployment = {
         "case_id": "mqar-k64-deltanet-seed202",
         "worker_sha256": "0" * 64,
+        "dataset_target": "zimike/synthetic-diagnostics-1111111111111111/1",
         "source_profile": "REPAIRED_NORMAL_V1",
         "nonce": "1" * 32,
         "task": task,
@@ -98,7 +101,7 @@ def tiny_kernel(
     package = release / "normal-package"
     (package / "src").mkdir(parents=True)
     shutil.copyfile(REPO / "scripts/normal_training_launch.py", package / "setup.py")
-    for name in ("normal_launch_diagnostics", "normal_driver_environment"):
+    for name in ("normal_launch_diagnostics", "normal_driver_environment", "normal_torchrun_entry"):
         owner = REPO / "scripts" / (name + ".py")
         if owner.exists():
             shutil.copyfile(owner, package / (name + ".py"))
@@ -106,7 +109,13 @@ def tiny_kernel(
         pass
     # Stdlib-only children: torchrun may orchestrate them, never construct a model.
     child = "import os,sys\ndef main():\n    assert os.environ['CUDA_VISIBLE_DEVICES']=='-1'\n"
-    if failing_phase == "worker":
+    if hard_exit:
+        child += (
+            "    assert os.environ['WORLD_SIZE']=='2'\n"
+            "    if os.environ['RANK']=='0':\n        os._exit(23)\n"
+            "    import time\n    time.sleep(30)\n"
+        )
+    elif failing_phase == "worker":
         child += (
             "    assert os.environ['WORLD_SIZE']=='2'\n"
             "    if os.environ['RANK']=='0':\n        raise ValueError(" + repr(SECRET) + ")\n"
@@ -116,6 +125,8 @@ def tiny_kernel(
         child += "    raise ValueError(" + repr(SECRET) + ")\n"
     else:
         child += "    return 0\n"
+    if pre_main_error:
+        child = "raise ModuleNotFoundError(" + repr(SECRET) + ")\n"
     (package / "src/normal_training_worker.py").write_text(child)
     (package / "worker.py").write_bytes(saved_entry_source())
     files = {

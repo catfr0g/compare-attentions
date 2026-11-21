@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from unified_normal_contract import canonical, descriptor, digest, read, require
-from unified_normal_profiles import PROFILES, REMAINING, REPAIRED
+from unified_normal_profiles import PROFILES, REPAIRED, is_remaining_profile
 from unified_normal_profiles import selected as source_profile
 
 SOURCE = "89b7e3ac5b42716e24d0d2a1994d13c32845e0c93a668f284e3cb341fe301cb8"
@@ -109,7 +109,9 @@ def operator_profile(candidate, deployment):
     )
     from unified_normal_authority import binding as authority_binding
 
-    if request["normal"]["profile"] in {REPAIRED, REMAINING}:
+    if request["normal"]["profile"] == REPAIRED or is_remaining_profile(
+        request["normal"]["profile"]
+    ):
         from unified_normal_generation import intent_value
 
         generation = intent_value(plan["generation"], request["normal"]["profile"])

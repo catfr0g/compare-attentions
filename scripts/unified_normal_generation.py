@@ -9,7 +9,13 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 from unified_normal_contract import canonical, digest, read, require
-from unified_normal_profiles import REMAINING, REPAIRED, authenticate_review, selected
+from unified_normal_profiles import (
+    FRESH_RESTART,
+    REPAIRED,
+    authenticate_review,
+    is_remaining_profile,
+    selected,
+)
 
 CONSENT = "d2ae90adec3a5a22f58aae0537064a8991159bcbdc2a0c82306c581b992da823"
 OLD_NONCE = "8043dc515cd194e8f34777d51522a3b8"
@@ -36,7 +42,11 @@ def intent_value(value, profile_name):
     """Validate the identical typed subject in builder and downstream plan consumer."""
     require(
         type(value) is dict
-        and set(value) == {"schema", "nonce", "case_id", "source_identity_sha256", "authorization"}
+        and set(value)
+        == (
+            {"schema", "nonce", "case_id", "source_identity_sha256", "authorization"}
+            | ({"restart"} if profile_name == FRESH_RESTART else set())
+        )
         and value["schema"] == SCHEMA,
         "UNIFIED_GENERATION_SCHEMA",
     )
@@ -45,7 +55,7 @@ def intent_value(value, profile_name):
     require(
         (
             (profile_name == REPAIRED and value["case_id"] == CASE)
-            or (profile_name == REMAINING and value["case_id"] in CASE_IDS)
+            or (is_remaining_profile(profile_name) and value["case_id"] in CASE_IDS)
         )
         and value["source_identity_sha256"] == selected(profile_name)["source"],
         "UNIFIED_GENERATION_SCOPE",
@@ -59,10 +69,14 @@ def intent_value(value, profile_name):
         "UNIFIED_GENERATION_FRESH_NONCE",
     )
     authorization = value["authorization"]
-    if profile_name == REMAINING:
+    if is_remaining_profile(profile_name):
         from normal_remaining_scope import permission
 
         permission(authorization)
+        if profile_name == FRESH_RESTART:
+            from normal_fresh_restart_scope import permission as restart_permission
+
+            restart_permission(value)
         return value
     require(
         type(authorization) is dict
@@ -89,7 +103,7 @@ def prepare_case(inputs, output, runtime_sha256):
     """Re-derive through authenticated NORMAL derive, not by relabelling old case."""
     name = inputs["source_profile"]
     generation = intent(inputs["generation"], name)
-    if name != REMAINING:
+    if not is_remaining_profile(name):
         authenticate_review(inputs["source_review"], name)
     # The new release is frozen UNBOUND; its source+plan review is required by
     # the existing typed NORMAL authority before preparation or credentials.
