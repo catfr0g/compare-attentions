@@ -287,14 +287,15 @@ def build(inputs, normal_archive, destination):
     parent = Path(inputs["sorting_candidate"]) / "sorting-mqar-seed202-pilot-v1.zip"
     unpack(parent, destination / "payload", PARENT)
     normal = destination / "payload/normal-package"
-    from unified_normal_profiles import REPAIRED, authenticate_package, is_remaining_profile
+    from unified_normal_profiles import REPAIRED, TINY, authenticate_package, is_remaining_profile
     from unified_normal_profiles import selected as source_profile
 
     profile_name = inputs.get("source_profile", PROFILE)
     release = source_profile(profile_name)
     unpack(normal_archive, normal, release["archive"], release["prefix"])
     authenticate_package(normal, profile_name)
-    if profile_name == REPAIRED or is_remaining_profile(profile_name):
+    finite = profile_name == TINY or is_remaining_profile(profile_name)
+    if profile_name == REPAIRED or finite:
         require("generation" in inputs, "UNIFIED_GENERATION_REQUIRED")
     request_inputs = {
         k: v
@@ -304,7 +305,7 @@ def build(inputs, normal_archive, destination):
             {"normal_review", "normal_decision"}
             | (
                 {"normal_plan", "normal_recipe"}
-                if profile_name != REPAIRED and not is_remaining_profile(profile_name)
+                if profile_name != REPAIRED and not finite
                 else set()
             )
         )
@@ -341,10 +342,17 @@ def build(inputs, normal_archive, destination):
         "unified_normal_remaining",
         "normal_remaining_scope",
         "normal_fresh_restart_scope",
+        "normal_tiny_scope",
+        "normal_training_lm",
+        "unified_normal_tiny",
     ):
         shutil.copyfile(Path(__file__).with_name(name + ".py"), host / (name + ".py"))
     integrate(host / "seed202_pilot", profile_name)
-    if is_remaining_profile(profile_name):
+    if profile_name == TINY:
+        from unified_normal_tiny import integrate_group
+
+        integrate_group(host / "seed202_pilot")
+    elif is_remaining_profile(profile_name):
         from unified_normal_remaining import integrate_group
 
         integrate_group(host / "seed202_pilot")
@@ -368,7 +376,14 @@ def build(inputs, normal_archive, destination):
     )
     plan = read(payload / "PLAN-UNAPPROVED.json")
     selected = request["run"]
-    if is_remaining_profile(profile_name):
+    if profile_name == TINY:
+        from unified_normal_generation import intent
+        from unified_normal_tiny import deployment as tiny_deployment
+
+        deployment = tiny_deployment(
+            payload, plan, selected, intent(inputs["generation"], profile_name)
+        )
+    elif is_remaining_profile(profile_name):
         from unified_normal_generation import intent
         from unified_normal_remaining import deployment as fresh_deployment
 
@@ -402,7 +417,7 @@ def build(inputs, normal_archive, destination):
             }
         },
     }
-    if profile_name != REPAIRED and not is_remaining_profile(profile_name):
+    if profile_name != REPAIRED and not finite:
         save(payload / "unified/normal-plan.json", normal_plan)
     from unified_normal_authority import SCHEMA, validate
 
@@ -436,6 +451,8 @@ def build(inputs, normal_archive, destination):
         shutil.copytree(payload / "unified/authority", worker_root / "authority")
     shutil.copyfile(recipe, worker_root / "recipe.yaml")
     shutil.copyfile(payload / "unified/normal-plan.json", worker_root / "normal-plan.json")
+    if profile_name == TINY:
+        shutil.copytree(selected["config"]["data"], worker_root / "data/tiny")
     save(worker_root / "manifest.json", {"files": inventory(worker_root)})
     worker = payload / "worker/seed202-pilot.zip.bin"
     with zipfile.ZipFile(worker, "w", compression=zipfile.ZIP_DEFLATED) as saved:
@@ -454,12 +471,11 @@ def build(inputs, normal_archive, destination):
     repository = Path(__file__).resolve().parents[1]
     maintained = [
         *repository.joinpath("scripts").glob("unified_normal_*.py"),
-        repository / "scripts/normal_remaining_scope.py",
-        repository / "scripts/normal_fresh_restart_scope.py",
+        *repository.joinpath("scripts").glob("normal_*scope.py"),
         repository / "scripts/build_unified_normal_contract.py",
-        repository / "docs/unified-normal-live-window.md",
-        repository / "docs/unified-normal-generation.md",
+        *repository.joinpath("docs").glob("unified-normal-*.md"),
         *repository.joinpath("tests/scripts").glob("*unified_normal*.py"),
+        *repository.joinpath("tests/scripts").glob("*tiny*.py"),
     ]
     for original in maintained:
         target = payload / "source/maintained" / original.relative_to(repository)

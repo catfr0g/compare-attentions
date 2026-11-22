@@ -89,6 +89,7 @@ def operator_profile(candidate, deployment):
         and set(declared_files)
         == {
             "meta.json",
+            *(["input.txt"] if case["task"] == "tiny_shakespeare_char" else []),
             *(["data-manifest.json"] if case["task"] == "kv_retrieval" else []),
             "train_inputs.npy",
             "train_labels.npy",
@@ -109,9 +110,10 @@ def operator_profile(candidate, deployment):
     )
     from unified_normal_authority import binding as authority_binding
 
-    if request["normal"]["profile"] == REPAIRED or is_remaining_profile(
-        request["normal"]["profile"]
-    ):
+    if request["normal"]["profile"] in (
+        REPAIRED,
+        "TINY_INDEPENDENT_CURRENT_V1",
+    ) or is_remaining_profile(request["normal"]["profile"]):
         from unified_normal_generation import intent_value
 
         generation = intent_value(plan["generation"], request["normal"]["profile"])
@@ -149,7 +151,7 @@ def profile(candidate, deployment):
         }
         and deployment["source_profile"] == profile_name
         and value["source_identity_sha256"] == expected_source
-        and value["wheel_sha256"] == WHEEL,
+        and value["wheel_sha256"] == source_profile(profile_name).get("wheel", WHEEL),
         "UNIFIED_EXPLICIT_NORMAL_PROFILE",
     )
     root = Path(value["package"])
@@ -164,7 +166,8 @@ def profile(candidate, deployment):
         and all(not p.is_symlink() and not p.is_junction() for p in root.rglob("*")),
         "UNIFIED_NORMAL_ROOT_CLOSURE",
     )
-    require(identity["wheel_sha256"] == WHEEL, "UNIFIED_NORMAL_WHEEL_SCOPE")
+    wheel = source_profile(profile_name).get("wheel", WHEEL)
+    require(identity["wheel_sha256"] == wheel, "UNIFIED_NORMAL_WHEEL_SCOPE")
     for name, pin in identity["files"].items():
         require(
             not Path(name).is_absolute()
@@ -205,7 +208,7 @@ def profile(candidate, deployment):
     )
     return {
         "normal_source_identity_sha256": expected_source,
-        "normal_wheel_sha256": WHEEL,
+        "normal_wheel_sha256": wheel,
         "normal_runtime_sha256": value["runtime_sha256"],
         "normal_profile": profile_name,
     }

@@ -30,6 +30,8 @@ MAIN = """def normal_main(mount_root, working, package_root, started):
         data = resolve_mount(
             mount_root, "zimike", "ca-kv-1c660aa5f54d88ea9e0c1ce4", "meta.json"
         ).parent
+    elif BINDING["task"] == "tiny_shakespeare_char":
+        data = release / "data/tiny"
     package = release / "normal-package"
     identity = package / "normal-source-identity.json"
     if hashlib.sha256(identity.read_bytes()).hexdigest() != BINDING["normal_source_sha256"]:
@@ -186,7 +188,7 @@ def render(metadata, deployment, payload):
         operator_sha256=deployment["worker_sha256"],
         normal_service_prefix=service_names(deployment)["normal_service_prefix"],
         normal_source_sha256=digest(Path(payload) / "normal-package/normal-source-identity.json"),
-        task="kv_retrieval" if deployment["task"] == "mqar-k64" else "sorting",
+        task="kv_retrieval" if deployment["task"] == "mqar-k64" else deployment["task"],
     )
     before = ast.get_source_segment(text, assignment)
     text = text.replace(before, "BINDING = " + repr(bound), 1)
