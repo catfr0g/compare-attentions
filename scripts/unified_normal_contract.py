@@ -189,7 +189,10 @@ _HELD_INPUTS = {}  # Only populated while real Win32 read-denial handles are hel
 def held_inputs(candidate, locked):
     """Reuse a caller's existing audited lease; never synthesize a boolean proof."""
     from seed202_pilot.prepared_files import check
+    from unified_normal_live import lease_owner
 
+    owner = lease_owner(locked)
+    require(owner is not None, "UNIFIED_INPUT_SCOPE_OWNERSHIP")
     key = str(Path(candidate).resolve())
     require(key not in _HELD_INPUTS, "UNIFIED_DUPLICATE_INPUT_SCOPE")
     required = {str(Path(p).resolve()) for p in evidence_paths(candidate)}
@@ -198,7 +201,7 @@ def held_inputs(candidate, locked):
     check(selected)
     _path, value = descriptor(candidate)
     verify_files(value, selected)
-    _HELD_INPUTS[key] = selected
+    _HELD_INPUTS[key] = (owner, selected)
     try:
         yield
     finally:
@@ -209,12 +212,13 @@ def held_inputs(candidate, locked):
 @contextlib.contextmanager
 def request_lease(candidate):
     """Only fallback acquisition hashes bytes; LIVE reuses held immutable inputs."""
+    from unified_normal_live import lease_owner
     from unified_normal_live import retained_lease as lease
 
-    selected = _HELD_INPUTS.get(str(Path(candidate).resolve()))
-    if selected is not None:
-        # Caller retains the real handles and performs whole-scope checks at
-        # entry/exit; the audited preparation capability checks them again.
+    scope = _HELD_INPUTS.get(str(Path(candidate).resolve()))
+    if scope is not None:
+        owner, selected = scope
+        require(owner is lease_owner(selected), "UNIFIED_INPUT_SCOPE_OWNERSHIP")
         yield selected
     else:
         with lease(evidence_paths(candidate)) as locked:
@@ -403,6 +407,10 @@ def expected_evidence(plan):
 
 
 def proof_rows(plan):
+    from unified_normal_preflight import authenticated_plan
+
+    if authenticated_plan(plan):
+        return expected_evidence(plan)
     _path, value = descriptor(plan["candidate_root"])
     for row in value["predecessors"]:
         replay_predecessor(plan, row["path"], row["case_id"])

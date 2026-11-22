@@ -1,8 +1,8 @@
 """Retain genuine Win32 byte leases across one public probe/seal/action chain.
 
-No approval, freshness result or source validation is cached here. Reuse is
-possible only inside the owning context's live write-denial handles. Every
-public CLI invocation still executes all its original guards and source checks.
+No approval or freshness result is cached here. Immutable reconstruction may
+be reused only inside the owning context's live write-denial handles. Every
+public invocation still executes current-state and fresh provider guards.
 """
 
 from __future__ import annotations
@@ -59,6 +59,14 @@ def retained_lease(paths):
         finally:
             owner.active = False
             _LEASES.reset(token)
+
+
+def lease_owner(pins):
+    """Resolve actual current ownership, never trust a saved mapping of SHA rows."""
+    for owner in reversed(_LEASES.get()):
+        if owner.usable() and all(owner.pins.get(name) is pin for name, pin in pins.items()):
+            return owner
+    return None
 
 
 def held_digest(path):
@@ -124,28 +132,26 @@ def run(commands):
     """Prehash before LIVE, then execute the unchanged public operator, stop on failure."""
     from seed202_pilot import cli
     from seed202_pilot.preparation import paths
-    from seed202_pilot.seal import _plan
     from unified_normal_contract import held_inputs
+    from unified_normal_preflight import static_preflight
 
     logging.disable(logging.CRITICAL)
     probe = _commands(commands)
     # Process-only auth_env/private are intentionally not artifact inputs.
     files = [*paths(probe), probe.plan, probe.review, probe.preparation, probe.lifetime]
     with retained_lease(files) as local:
-        with held_inputs(probe.candidate_dir, local):
-            _plan(json.loads(probe.plan.read_bytes()))
-        for argv in commands:
-            # Seal alone has no authenticated_imports scope. Reuse the existing
-            # supported scope here, never nest it inside another CLI command.
-            scope = (
-                held_inputs(probe.candidate_dir, local)
-                if argv[0] == "seal"
-                else contextlib.nullcontext()
-            )
-            with scope:
-                result = cli.main(argv)
-            if result:
-                return result
+        with static_preflight(probe.candidate_dir, local, probe.plan, probe.review):
+            for argv in commands:
+                # Seal has no authenticated_imports scope; never nest that scope.
+                scope = (
+                    held_inputs(probe.candidate_dir, local)
+                    if argv[0] == "seal"
+                    else contextlib.nullcontext()
+                )
+                with scope:
+                    result = cli.main(argv)
+                if result:
+                    return result
     return 0
 
 

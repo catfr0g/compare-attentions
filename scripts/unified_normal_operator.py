@@ -78,6 +78,13 @@ def integrate(source, profile_name=PROFILE):
         '        if args.command == "composite":',
     )
     seal = source / "seal.py"
+    replace(
+        seal,
+        '    _require(type(plan) is dict and plan.get("schema_version") == 2, "PLAN_SCHEMA")\n',
+        "    from unified_normal_preflight import authenticated_plan\n\n"
+        "    if authenticated_plan(plan):\n        return\n"
+        '    _require(type(plan) is dict and plan.get("schema_version") == 2, "PLAN_SCHEMA")\n',
+    )
     text = seal.read_text(encoding="utf-8")
     start = text.index(
         "            and (\n", text.index('    predecessors = proof["predecessor_evidence"]')
@@ -320,6 +327,7 @@ def build(inputs, normal_archive, destination):
         "completed_sorting404_publication",
         "training_diagnostics",
         "unified_normal_live",
+        "unified_normal_preflight",
         "unified_normal_replay",
         "unified_normal_source",
         "unified_normal_profiles",
