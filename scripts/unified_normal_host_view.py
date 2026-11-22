@@ -5,7 +5,7 @@ import json
 from itertools import groupby
 from pathlib import Path
 
-RELEASE = "normal-host-readonly-nonblocking-tracking-v3"
+RELEASE = "normal-host-readonly-tiny-domain-v4"
 
 
 def canonical(value):
@@ -90,11 +90,11 @@ def lifecycle(case, source, native, training, publications):
 
 
 def reader_identity(*, candidate=None, recorded=None, inputs=None):
-    """Pin V3 separately; authenticate V2 against its actual immutable reader files."""
-    if (
-        recorded is not None
-        and recorded.get("release") == "normal-host-readonly-equal-iteration-v2"
-    ):
+    """Pin V4 separately; authenticate historical readers against their own bytes."""
+    if recorded is not None and recorded.get("release") in {
+        "normal-host-readonly-equal-iteration-v2",
+        "normal-host-readonly-nonblocking-tracking-v3",
+    }:
         root = Path(candidate) / "payload/source/src"
         names = {
             "unified_normal_host.py",

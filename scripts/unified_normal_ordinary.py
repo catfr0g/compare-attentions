@@ -176,14 +176,13 @@ def replay(spec, recorded, inputs):
             data,
         )
         require(case["engineering_only"] is False, "UNIFIED_ORDINARY_TARGET_ONLY")
-        for index, domain in enumerate(declared_data_domains(case)):
+        domains = declared_data_domains(case, deployment["nonce"])
+        for index, domain in enumerate(domains):
             selected = {**case, "config": {**case["config"], "data": domain}}
             try:
                 native = verify_native(root / "out", selected)
             except ValueError as error:
-                if error.args != ("NORMAL_NATIVE_CONFIG",) or index + 1 == len(
-                    declared_data_domains(case)
-                ):
+                if error.args != ("NORMAL_NATIVE_CONFIG",) or index + 1 == len(domains):
                     raise
             else:
                 case = selected
@@ -244,7 +243,11 @@ def replay(spec, recorded, inputs):
         else:
             from unified_normal_host_view import RELEASE
 
-            require(recorded["host_reader"]["release"] == RELEASE, "UNIFIED_SUPPORTED_HOST_READER")
+            require(
+                recorded["host_reader"]["release"]
+                in {RELEASE, "normal-host-readonly-nonblocking-tracking-v3"},
+                "UNIFIED_SUPPORTED_HOST_READER",
+            )
             # Pinned observations retain warnings/raw data, but cannot grant scientific authority.
             require(
                 training["diagnostic"]["authority"] == "AUXILIARY_ONLY", "UNIFIED_TRACKING_POLICY"

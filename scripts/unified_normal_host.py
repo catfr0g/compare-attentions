@@ -5,6 +5,7 @@ import contextlib
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 import uuid
@@ -62,10 +63,16 @@ def sources(package):
         shutil.rmtree(root)
 
 
-def declared_data_domains(case):
+def declared_data_domains(case, nonce=None):
     """Expected mount domains come from the saved main, never a downloaded path."""
     if case["engineering_only"]:
         return (case["config"]["data"],)
+    if case["task"] == "tiny_shakespeare_char":
+        require(
+            type(nonce) is str and re.fullmatch(r"[0-9a-f]{32}", nonce) is not None,
+            "UNIFIED_HOST_TINY_NONCE",
+        )
+        return (f"/kaggle/temp/normal-{nonce}/data/tiny",)
     if case["task"] == "sorting":
         return ("/kaggle/temp/sorting-science-fcff1b5daf574b70/data/sorting",)
     return (
@@ -367,6 +374,7 @@ def run_public(args, approval, provider, metadata, source):
         "request": payload / "unified/request.json",
         "phase": args.command,
         "snapshot": args.service_snapshot,
+        "nonce": plan["nonce"],
     }
     command += [token for name, value in fields.items() for token in ("--" + name, str(value))]
     allowed = set(
@@ -412,6 +420,7 @@ def main(argv=None):
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--case", required=True)
     parser.add_argument("--request", type=Path)
+    parser.add_argument("--nonce")
     parser.add_argument("--phase", choices=("services", "accept"), required=True)
     args = parser.parse_args(argv)
     require(
@@ -442,7 +451,7 @@ def main(argv=None):
                 and digest(args.plan) == expected["plan_sha256"],
                 "UNIFIED_HOST_REQUEST_SCOPE",
             )
-            domains = declared_data_domains(case)
+            domains = declared_data_domains(case, args.nonce)
             from normal_training_native import verify_native
 
             for index, domain in enumerate(domains):
