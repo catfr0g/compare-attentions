@@ -79,6 +79,10 @@ def task_quality(package, root, case, data):
     from normal_training_plan import canonical
 
     root = Path(root)
+    if case.get("task") == "tiny_shakespeare_char" and not case["engineering_only"]:
+        from normal_training_lm import accept_cached
+
+        return accept_cached(package, root, case, data)
     if case["engineering_only"]:
         note = read(root / "task-engineering.json")
         require(
@@ -144,6 +148,8 @@ def inference_readback(root, case, values):
     """Get the existing inference task and artifact; never create or update a task."""
     if case["engineering_only"]:
         return {"scope": "ENGINEERING_NO_TASK_INFERENCE", "remote_mutations": 0}
+    if case.get("task") == "tiny_shakespeare_char":
+        return {"scope": "NATIVE_VALIDATION_NO_ADDITIONAL_INFERENCE", "remote_mutations": 0}
     from normal_training_plan import canonical
     from quality_inherit import leaf
     from seed202_pilot.cloud_services import _scalars

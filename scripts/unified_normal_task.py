@@ -36,6 +36,18 @@ def publish_tracking(args, case, report):
     return observed
 
 
+def native_character_task(root, case, data):
+    """Serialize native full-budget validation without another scientific forward."""
+    from normal_training_lm import cached_quality
+    from normal_training_native import verify_native
+    from normal_training_plan import create_json
+
+    proof = verify_native(Path(root) / "out", case)
+    report = cached_quality(root, case, data, proof)
+    create_json(Path(root) / "task-val.json", report)
+    return report
+
+
 def main(argv=None):
     parser = NormalArgumentParser(allow_abbrev=False)
     for name in ("package", "plan", "recipe", "data", "private", "output", "review", "decision"):
@@ -104,6 +116,11 @@ def main(argv=None):
 
         leaf("runtime").guard()
         sys.path.insert(1, str(args.package / "inherited-source"))
+        if case["task"] == "tiny_shakespeare_char":
+            native_character_task(args.output, case, args.data)
+            # Native CE is already reported by the enabled training tracker.
+            # No separate inference task or inference service is required.
+            return 0
         from normal_training_native import verify_native
         from normal_training_worker import imported_sources
         from seed202_pilot.cloud_evaluate import evaluate_target
