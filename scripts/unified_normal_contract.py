@@ -161,12 +161,11 @@ def descriptor(candidate):
             "UNIFIED_PREDECESSOR_INPUT_PIN",
         )
     require(len(ids) == len(set(ids)), "UNIFIED_DUPLICATE_PREDECESSOR")
-    from unified_normal_profiles import TINY
+    from unified_normal_profiles import independent_adapter
 
-    if value["normal"]["profile"] == TINY:
-        from unified_normal_tiny import validate_request
-
-        validate_request(value)
+    adapter = independent_adapter(value["normal"]["profile"])
+    if adapter is not None:
+        adapter.validate_request(value)
     from unified_normal_profiles import is_remaining_profile
 
     if is_remaining_profile(value["normal"]["profile"]):

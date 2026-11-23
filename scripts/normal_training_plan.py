@@ -69,14 +69,21 @@ def derive(package, plan_path, case_id, recipe, data):
     require(digest(recipe) == selected["recipe_sha256"], "NORMAL_RECIPE_BYTES")
     require(type(selected["seed"]) is int, "NORMAL_DECLARED_SEED")
     require(selected["family"] in {"classic", "deltanet"}, "NORMAL_FAMILY")
-    require(selected["task"] in {"sorting", "kv_retrieval", "tiny_shakespeare_char"}, "NORMAL_TASK")
+    require(
+        selected["task"]
+        in {"sorting", "kv_retrieval", "tiny_shakespeare_char", "ruler_variable_tracking"},
+        "NORMAL_TASK",
+    )
     expected_files = set(selected["data_files"])
     require(
         {"meta.json", "train_inputs.npy", "train_labels.npy", "val_inputs.npy", "val_labels.npy"}
         | (
-            {"input.txt", "test_inputs.npy", "test_labels.npy"}
-            if selected["task"] == "tiny_shakespeare_char"
-            else set()
+            ({"input.txt"} if selected["task"] == "tiny_shakespeare_char" else set())
+            | (
+                {"test_inputs.npy", "test_labels.npy"}
+                if selected["task"] in {"tiny_shakespeare_char", "ruler_variable_tracking"}
+                else set()
+            )
         )
         <= expected_files,
         "NORMAL_FULL_DATA_PINS",
@@ -121,6 +128,11 @@ def derive(package, plan_path, case_id, recipe, data):
         from compare_attention.data.tiny_shakespeare import CharacterLMConfig, verify_integrity
 
         dataset = CharacterLMConfig.model_validate(saved["dataset"], strict=True)
+        verify_integrity(data, dataset)
+    elif selected["task"] == "ruler_variable_tracking":
+        from compare_attention.data.tracking import RulerConfig, verify_integrity
+
+        dataset = RulerConfig.model_validate(saved["dataset"], strict=True)
         verify_integrity(data, dataset)
     else:
         from compare_attention.data.config import KVRetrievalConfig

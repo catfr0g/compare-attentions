@@ -116,6 +116,11 @@ def main(argv=None):
 
         leaf("runtime").guard()
         sys.path.insert(1, str(args.package / "inherited-source"))
+        if case["task"] == "ruler_variable_tracking":
+            from normal_training_tracking import cloud_task
+
+            cloud_task(args.package, args.output, case, args.data)
+            return 0
         if case["task"] == "tiny_shakespeare_char":
             native_character_task(args.output, case, args.data)
             # Native CE is already reported by the enabled training tracker.

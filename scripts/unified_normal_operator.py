@@ -287,14 +287,20 @@ def build(inputs, normal_archive, destination):
     parent = Path(inputs["sorting_candidate"]) / "sorting-mqar-seed202-pilot-v1.zip"
     unpack(parent, destination / "payload", PARENT)
     normal = destination / "payload/normal-package"
-    from unified_normal_profiles import REPAIRED, TINY, authenticate_package, is_remaining_profile
+    from unified_normal_profiles import (
+        REPAIRED,
+        authenticate_package,
+        independent_adapter,
+        is_remaining_profile,
+    )
     from unified_normal_profiles import selected as source_profile
 
     profile_name = inputs.get("source_profile", PROFILE)
     release = source_profile(profile_name)
     unpack(normal_archive, normal, release["archive"], release["prefix"])
     authenticate_package(normal, profile_name)
-    finite = profile_name == TINY or is_remaining_profile(profile_name)
+    adapter = independent_adapter(profile_name)
+    finite = adapter is not None or is_remaining_profile(profile_name)
     if profile_name == REPAIRED or finite:
         require("generation" in inputs, "UNIFIED_GENERATION_REQUIRED")
     request_inputs = {
@@ -345,13 +351,14 @@ def build(inputs, normal_archive, destination):
         "normal_tiny_scope",
         "normal_training_lm",
         "unified_normal_tiny",
+        "normal_ruler_scope",
+        "normal_training_tracking",
+        "unified_normal_ruler",
     ):
         shutil.copyfile(Path(__file__).with_name(name + ".py"), host / (name + ".py"))
     integrate(host / "seed202_pilot", profile_name)
-    if profile_name == TINY:
-        from unified_normal_tiny import integrate_group
-
-        integrate_group(host / "seed202_pilot")
+    if adapter is not None:
+        adapter.integrate_group(host / "seed202_pilot")
     elif is_remaining_profile(profile_name):
         from unified_normal_remaining import integrate_group
 
@@ -376,11 +383,10 @@ def build(inputs, normal_archive, destination):
     )
     plan = read(payload / "PLAN-UNAPPROVED.json")
     selected = request["run"]
-    if profile_name == TINY:
+    if adapter is not None:
         from unified_normal_generation import intent
-        from unified_normal_tiny import deployment as tiny_deployment
 
-        deployment = tiny_deployment(
+        deployment = adapter.deployment(
             payload, plan, selected, intent(inputs["generation"], profile_name)
         )
     elif is_remaining_profile(profile_name):
@@ -451,8 +457,9 @@ def build(inputs, normal_archive, destination):
         shutil.copytree(payload / "unified/authority", worker_root / "authority")
     shutil.copyfile(recipe, worker_root / "recipe.yaml")
     shutil.copyfile(payload / "unified/normal-plan.json", worker_root / "normal-plan.json")
-    if profile_name == TINY:
-        shutil.copytree(selected["config"]["data"], worker_root / "data/tiny")
+    if adapter is not None:
+        domain = "tiny" if selected["task"] == "tiny_shakespeare_char" else "ruler"
+        shutil.copytree(selected["config"]["data"], worker_root / "data" / domain)
     save(worker_root / "manifest.json", {"files": inventory(worker_root)})
     worker = payload / "worker/seed202-pilot.zip.bin"
     with zipfile.ZipFile(worker, "w", compression=zipfile.ZIP_DEFLATED) as saved:
@@ -468,19 +475,9 @@ def build(inputs, normal_archive, destination):
     deployment["kernel_source_sha256"] = digest(deploy / "kernel/kernel.py")
     plan["source_profile"] = profile_name
     save(payload / "PLAN-UNAPPROVED.json", plan)
-    repository = Path(__file__).resolve().parents[1]
-    maintained = [
-        *repository.joinpath("scripts").glob("unified_normal_*.py"),
-        *repository.joinpath("scripts").glob("normal_*scope.py"),
-        repository / "scripts/build_unified_normal_contract.py",
-        *repository.joinpath("docs").glob("unified-normal-*.md"),
-        *repository.joinpath("tests/scripts").glob("*unified_normal*.py"),
-        *repository.joinpath("tests/scripts").glob("*tiny*.py"),
-    ]
-    for original in maintained:
-        target = payload / "source/maintained" / original.relative_to(repository)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(original, target)
+    from unified_normal_source import copy_maintained
+
+    copy_maintained(payload)
     freeze(destination)
     return destination
 

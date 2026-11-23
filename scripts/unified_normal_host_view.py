@@ -5,7 +5,7 @@ import json
 from itertools import groupby
 from pathlib import Path
 
-RELEASE = "normal-host-readonly-tiny-domain-v4"
+RELEASE = "normal-host-readonly-ruler-v5"
 
 
 def canonical(value):
@@ -90,10 +90,11 @@ def lifecycle(case, source, native, training, publications):
 
 
 def reader_identity(*, candidate=None, recorded=None, inputs=None):
-    """Pin V4 separately; authenticate historical readers against their own bytes."""
+    """Pin V5 separately; authenticate historical readers against their own bytes."""
     if recorded is not None and recorded.get("release") in {
         "normal-host-readonly-equal-iteration-v2",
         "normal-host-readonly-nonblocking-tracking-v3",
+        "normal-host-readonly-tiny-domain-v4",
     }:
         root = Path(candidate) / "payload/source/src"
         names = {
@@ -133,6 +134,7 @@ def reader_identity(*, candidate=None, recorded=None, inputs=None):
         "files": {
             name: hashlib.sha256((root / name).read_bytes()).hexdigest()
             for name in (
+                "normal_training_tracking.py",
                 "unified_normal_host.py",
                 "unified_normal_host_view.py",
                 "unified_normal_ordinary.py",

@@ -67,14 +67,16 @@ def declared_data_domains(case, nonce=None):
     """Expected mount domains come from the saved main, never a downloaded path."""
     if case["engineering_only"]:
         return (case["config"]["data"],)
-    if case["task"] == "tiny_shakespeare_char":
+    if case["task"] in {"tiny_shakespeare_char", "ruler_variable_tracking"}:
+        domain = "tiny" if case["task"] == "tiny_shakespeare_char" else "ruler"
         require(
             type(nonce) is str and re.fullmatch(r"[0-9a-f]{32}", nonce) is not None,
-            "UNIFIED_HOST_TINY_NONCE",
+            "UNIFIED_HOST_" + domain.upper() + "_NONCE",
         )
-        return (f"/kaggle/temp/normal-{nonce}/data/tiny",)
+        return (f"/kaggle/temp/normal-{nonce}/data/{domain}",)
     if case["task"] == "sorting":
         return ("/kaggle/temp/sorting-science-fcff1b5daf574b70/data/sorting",)
+    require(case["task"] == "kv_retrieval", "UNIFIED_HOST_TASK")
     return (
         "/kaggle/input/datasets/zimike/ca-kv-1c660aa5f54d88ea9e0c1ce4",
         "/kaggle/input/ca-kv-1c660aa5f54d88ea9e0c1ce4",
@@ -88,6 +90,10 @@ def task_quality(package, root, case, data):
     root = Path(root)
     if case.get("task") == "tiny_shakespeare_char" and not case["engineering_only"]:
         from normal_training_lm import accept_cached
+
+        return accept_cached(package, root, case, data)
+    if case.get("task") == "ruler_variable_tracking" and not case["engineering_only"]:
+        from normal_training_tracking import accept_cached
 
         return accept_cached(package, root, case, data)
     if case["engineering_only"]:
@@ -157,6 +163,10 @@ def inference_readback(root, case, values):
         return {"scope": "ENGINEERING_NO_TASK_INFERENCE", "remote_mutations": 0}
     if case.get("task") == "tiny_shakespeare_char":
         return {"scope": "NATIVE_VALIDATION_NO_ADDITIONAL_INFERENCE", "remote_mutations": 0}
+    if case.get("task") == "ruler_variable_tracking":
+        from normal_training_tracking import service_scope
+
+        return service_scope()
     from normal_training_plan import canonical
     from quality_inherit import leaf
     from seed202_pilot.cloud_services import _scalars

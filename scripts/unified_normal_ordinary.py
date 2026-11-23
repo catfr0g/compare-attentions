@@ -1,12 +1,47 @@
 """Ordinary NORMAL whole-object replay from request-pinned immutable observations."""
 
 import hashlib
+import re
 from pathlib import Path, PurePosixPath
 
 from unified_normal_contract import canonical, read, require
 from unified_normal_host_view import lifecycle as assemble_lifecycle
 from unified_normal_host_view import raw_view, reader_identity, training_view
 from unified_normal_profiles import PROFILES
+
+
+def validate_snapshot_fulls(snapshot, case, files):
+    """Native callback names are flat step_XXXXXXXX.pt; final copies may be nested."""
+    from normal_training_native import validate_full
+
+    from compare_attention.train.checkpoint import load_checkpoint
+
+    seen, steps = {}, set()
+    for name, pin in files.items():
+        member = PurePosixPath(name)
+        match = re.fullmatch(r"step_([0-9]{8})\.pt", member.name)
+        require(
+            match is not None or "checkpoints" not in member.parts or member.suffix != ".pt",
+            "UNIFIED_ORDINARY_FULL_PATH",
+        )
+        if match is None:
+            continue
+        require(
+            len(member.parts) == 2 or member.parts[-3:-1] == ("out", "checkpoints"),
+            "UNIFIED_ORDINARY_FULL_PATH",
+        )
+        step = int(match[1])
+        if pin["sha256"] in seen:
+            require(seen[pin["sha256"]] == step, "UNIFIED_ORDINARY_FULL_GRID")
+            continue
+        full = load_checkpoint(Path(snapshot) / name)
+        require(
+            full["step"] == step and step in case["checkpoint_steps"], "UNIFIED_ORDINARY_FULL_GRID"
+        )
+        validate_full(full, case, step=step)
+        steps.add(step)
+        seen[pin["sha256"]] = step
+    require(steps == set(case["checkpoint_steps"]), "UNIFIED_ORDINARY_FULL_COVERAGE")
 
 
 def inference_observation(root, case, observed):
@@ -162,11 +197,9 @@ def replay(spec, recorded, inputs):
 
     with sources(package):
         from normal_training_acceptance import verify_native_service, verify_sources
-        from normal_training_native import validate_full, verify_native
+        from normal_training_native import verify_native
         from normal_training_plan import derive
         from training_completion import validate_unsampled_readback
-
-        from compare_attention.train.checkpoint import load_checkpoint
 
         case = derive(
             package,
@@ -245,7 +278,11 @@ def replay(spec, recorded, inputs):
 
             require(
                 recorded["host_reader"]["release"]
-                in {RELEASE, "normal-host-readonly-nonblocking-tracking-v3"},
+                in {
+                    RELEASE,
+                    "normal-host-readonly-nonblocking-tracking-v3",
+                    "normal-host-readonly-tiny-domain-v4",
+                },
                 "UNIFIED_SUPPORTED_HOST_READER",
             )
             # Pinned observations retain warnings/raw data, but cannot grant scientific authority.
@@ -298,10 +335,7 @@ def replay(spec, recorded, inputs):
                 and hashlib.sha256(path.read_bytes()).hexdigest() == pin["sha256"],
                 "UNIFIED_ORDINARY_SNAPSHOT_BYTES",
             )
-            if "checkpoints" in path.parts and path.suffix == ".pt":
-                full = load_checkpoint(path)
-                require(full["step"] in case["checkpoint_steps"], "UNIFIED_ORDINARY_FULL_GRID")
-                validate_full(full, case, step=full["step"])
+        validate_snapshot_fulls(snapshot, case, manifest["files"])
         final = final_envelope["final"]
         require(
             set(final["files"])
@@ -331,6 +365,10 @@ def replay(spec, recorded, inputs):
             require(
                 inference["diagnostic"]["authority"] == "AUXILIARY_ONLY", "UNIFIED_TRACKING_POLICY"
             )
+            if case["task"] == "ruler_variable_tracking":
+                from normal_training_tracking import service_scope
+
+                require(inference == service_scope(), "UNIFIED_RULER_INFERENCE_SERVICE_SCOPE")
         expected = {
             "schema": "unified-normal-whole-acceptance-v1",
             "case": case,

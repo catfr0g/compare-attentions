@@ -32,6 +32,8 @@ MAIN = """def normal_main(mount_root, working, package_root, started):
         ).parent
     elif BINDING["task"] == "tiny_shakespeare_char":
         data = release / "data/tiny"
+    elif BINDING["task"] == "ruler_variable_tracking":
+        data = release / "data/ruler"
     package = release / "normal-package"
     identity = package / "normal-source-identity.json"
     if hashlib.sha256(identity.read_bytes()).hexdigest() != BINDING["normal_source_sha256"]:

@@ -12,7 +12,15 @@ REMAINING_SIX = "REMAINING_SIX_ELASTIC_FIXED_V1"
 REMAINING_FOUR = "REMAINING_FOUR_NONBLOCKING_TRACKING_V1"
 REMAINING_THREE = "REMAINING_THREE_FINISH_IMPORT_FIXED_V1"
 TINY = "TINY_INDEPENDENT_CURRENT_V1"
+RULER = "RULER_INDEPENDENT_CURRENT_V1"
 PROFILES = {
+    RULER: {
+        "source": "d441b373062433461ec494366d8d2d469d30b553fb76c2c6e368de0ed3a965fa",
+        "archive": "5f8aba988763ddca449df729d2c27bc4a81b2a1dfdb50c9105effee5e36b5c31",
+        "prefix": "normal-package/",
+        "wheel": "dc7f14bfa941624193089c8ca201df9f39c13d5592cb5ad32e2a2dbd92803475",
+        "review_policy": "EXTERNAL_TYPED_NORMAL_SOURCE_AND_PLAN",
+    },
     TINY: {
         "source": "382081d3c2a8fb8a7538c64620434538d36893796a01e5da0991c68e9be42a8e",
         "archive": "e745d161ff8fd8c9d9e75109e332d2ab9e858d6c9d684e679553350cf04ce9d8",
@@ -67,6 +75,17 @@ PROFILES = {
 def is_remaining_profile(name):
     """Finite old/new producer coexistence; never arbitrary source profiles."""
     return name in (REMAINING, FRESH_RESTART, REMAINING_SIX, REMAINING_FOUR, REMAINING_THREE)
+
+
+def independent_adapter(name):
+    """Only the two independently authorized finite task series."""
+    if name == TINY:
+        import unified_normal_tiny as adapter
+    elif name == RULER:
+        import unified_normal_ruler as adapter
+    else:
+        return None
+    return adapter
 
 
 def selected(name=LEGACY):

@@ -113,6 +113,7 @@ def operator_profile(candidate, deployment):
     if request["normal"]["profile"] in (
         REPAIRED,
         "TINY_INDEPENDENT_CURRENT_V1",
+        "RULER_INDEPENDENT_CURRENT_V1",
     ) or is_remaining_profile(request["normal"]["profile"]):
         from unified_normal_generation import intent_value
 
@@ -128,6 +129,28 @@ def operator_profile(candidate, deployment):
         **authority_binding(candidate),
         **service_names(deployment),
     }
+
+
+def copy_maintained(payload):
+    """Freeze the maintained implementation/QA closure alongside real runtime bytes."""
+    import shutil
+
+    repository = Path(__file__).resolve().parents[1]
+    maintained = [
+        *repository.joinpath("scripts").glob("unified_normal_*.py"),
+        *repository.joinpath("scripts").glob("normal_*scope.py"),
+        repository / "scripts/build_unified_normal_contract.py",
+        *repository.joinpath("docs").glob("unified-normal-*.md"),
+        *repository.joinpath("tests/scripts").glob("*unified_normal*.py"),
+        *repository.joinpath("tests/scripts").glob("*tiny*.py"),
+        *repository.joinpath("tests/scripts").glob("*ruler*.py"),
+        repository / "scripts/build_ruler_training_request.py",
+        repository / "scripts/normal_training_tracking.py",
+    ]
+    for original in maintained:
+        target = payload / "source/maintained" / original.relative_to(repository)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(original, target)
 
 
 def profile(candidate, deployment):

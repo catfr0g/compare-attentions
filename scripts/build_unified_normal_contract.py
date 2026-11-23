@@ -29,12 +29,11 @@ def save(path, value):
 def build(inputs, output):
     """Snapshot declared source/replay bytes without duplicating scientific arrays."""
     profile_name = inputs.get("source_profile", PROFILE)
-    from unified_normal_profiles import TINY
+    from unified_normal_profiles import independent_adapter
 
-    if profile_name == TINY:
-        from unified_normal_tiny import build_request
-
-        return build_request(inputs, output)
+    adapter = independent_adapter(profile_name)
+    if adapter is not None:
+        return adapter.build_request(inputs, output)
     if is_remaining_profile(profile_name):
         from unified_normal_remaining import build_request
 
