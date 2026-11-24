@@ -354,6 +354,7 @@ def build(inputs, normal_archive, destination):
         "normal_ruler_scope",
         "normal_training_tracking",
         "unified_normal_ruler",
+        "unified_normal_ruler_time",
     ):
         shutil.copyfile(Path(__file__).with_name(name + ".py"), host / (name + ".py"))
     integrate(host / "seed202_pilot", profile_name)

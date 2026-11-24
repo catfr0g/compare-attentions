@@ -7,7 +7,7 @@ from pathlib import Path
 
 from normal_ruler_scope import CASE_IDS, case_rows, require_prefix, require_run
 from unified_normal_contract import descriptor, digest, read, require
-from unified_normal_profiles import RULER, authenticate_package, selected
+from unified_normal_profiles import RULER, RULER_TIME, authenticate_package, selected
 
 
 def validate_request(value):
@@ -29,7 +29,7 @@ def transition(candidate, case_id):
 
     _path, request = descriptor(candidate)
     plan = read(Path(candidate) / "payload/unified/normal-plan.json")
-    generation = intent_value(plan["generation"], RULER)
+    generation = intent_value(plan["generation"], request["normal"]["profile"])
     validate_request(request)
     require(case_id == request["run"]["id"] == generation["case_id"], "RULER_TRANSITION_CASE")
     return {
@@ -82,8 +82,9 @@ def build_request(inputs, output):
         },
         "RULER_BUILD_INPUTS",
     )
-    require(inputs["source_profile"] == RULER, "RULER_PROFILE")
-    generation = intent(inputs["generation"], RULER)
+    profile_name = inputs["source_profile"]
+    require(profile_name in {RULER, RULER_TIME}, "RULER_PROFILE")
+    generation = intent(inputs["generation"], profile_name)
     rows = inputs["predecessors"]
     require(type(rows) is list, "RULER_PREFIX_SCHEMA")
     for row in rows:
@@ -97,7 +98,7 @@ def build_request(inputs, output):
     output = Path(output).resolve()
     require(not output.exists(), "UNIFIED_CREATE_ONLY")
     normal = Path(inputs["normal_package"])
-    authenticate_package(normal, RULER)
+    authenticate_package(normal, profile_name)
     runtime_path = Path(inputs["runtime_record"])
     require(digest(runtime_path) == RUNTIME_RECORD, "UNIFIED_AUTHENTIC_RUNTIME_REFERENCE")
     fields = ["completed", 0, "acceptance", "timing", "metadata", "execution_runtime"]
@@ -180,10 +181,10 @@ def build_request(inputs, output):
             "run": case,
             "predecessors": rows,
             "normal": {
-                "profile": RULER,
+                "profile": profile_name,
                 "package": str(normal),
-                "source_identity_sha256": selected(RULER)["source"],
-                "wheel_sha256": selected(RULER)["wheel"],
+                "source_identity_sha256": selected(profile_name)["source"],
+                "wheel_sha256": selected(profile_name)["wheel"],
                 "runtime_record": str(runtime_path),
                 "runtime_record_sha256": RUNTIME_RECORD,
                 "runtime_path": fields,
@@ -200,14 +201,19 @@ def build_request(inputs, output):
     return output
 
 
-def deployment(payload, plan, run, generation):
+def deployment(payload, plan, run, generation, *, profile_name=RULER):
     """Reuse the proven fresh two-stage target pattern with new Ruler-owned nonces."""
     from unified_normal_generation import intent_value, namespace
     from unified_normal_operator import save
 
-    intent_value(generation, RULER)
+    require(profile_name in {RULER, RULER_TIME}, "RULER_PROFILE")
+    intent_value(generation, profile_name)
     index = CASE_IDS.index(run["id"])
     row = case_rows()[index]
+    if profile_name == RULER_TIME:
+        from normal_ruler_scope import operational_case_rows
+
+        row = operational_case_rows()[index]
     require(
         (run["task"], run["seed"], run["family"]) == (row["task"], row["seed"], row["family"]),
         "RULER_DEPLOYMENT_CASE",
@@ -226,12 +232,12 @@ def deployment(payload, plan, run, generation):
         "family": row["family"],
         "seed": row["seed"],
         "mode": "FRESH_TWO_STAGE",
-        "source_profile": RULER,
+        "source_profile": profile_name,
         "nonce": generation["nonce"],
         **targets,
         "order": index,
         "requested_flops": row["requested_flops"],
-        "case_deadline_seconds": 28800,
+        "case_deadline_seconds": row["case_deadline_seconds"],
         "acceptance_tail_seconds": 1800,
         "policy": "STOPALL_ANYFAIL",
         "predecessor_barrier": "REPLAY_AUTHENTIC_HOST_NATIVE_V2_FULL_BEFORE_MUTATION",
@@ -263,7 +269,10 @@ def deployment(payload, plan, run, generation):
         and any(isinstance(t, ast.Name) and t.id == "BINDING" for t in n.targets)
     )
     bound = ast.literal_eval(node.value)
-    bound.update(case_id=run["id"], kernel_seconds=30600)
+    bound.update(
+        case_id=run["id"],
+        kernel_seconds=result["case_deadline_seconds"] + result["acceptance_tail_seconds"],
+    )
     path.write_text(
         text.replace(ast.get_source_segment(text, node), "BINDING = " + repr(bound), 1),
         encoding="utf-8",

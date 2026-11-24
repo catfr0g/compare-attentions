@@ -114,6 +114,7 @@ def operator_profile(candidate, deployment):
         REPAIRED,
         "TINY_INDEPENDENT_CURRENT_V1",
         "RULER_INDEPENDENT_CURRENT_V1",
+        "RULER_CLASSIC404_OPERATIONAL_TIME_V1",
     ) or is_remaining_profile(request["normal"]["profile"]):
         from unified_normal_generation import intent_value
 

@@ -69,6 +69,18 @@ def case_rows():
     )
 
 
+def operational_case_rows():
+    """Future Classic404 policy; accepted cases and Delta404 retain historical limits."""
+    return tuple(
+        {**row, "case_deadline_seconds": 7200} if row["case_id"] == "RulerClassic404" else row
+        for row in case_rows()
+    )
+
+
+def operational_case_specs(spec_type):
+    return tuple(spec_type(**row) for row in operational_case_rows())
+
+
 def case_specs(spec_type):
     return tuple(spec_type(**row) for row in case_rows())
 

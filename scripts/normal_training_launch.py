@@ -14,6 +14,21 @@ from normal_driver_environment import validated_driver_environment
 from normal_launch_diagnostics import NormalArgumentParser, normal_cli
 
 
+def execution_timeout(identity, engineering, case_id, phase):
+    """Finite future source policy; no arbitrary deadline or scientific overrides."""
+    policy = identity.get("operational_time_policy")
+    if policy is not None:
+        if policy != "RULER_CLASSIC404_2H_V1":
+            raise ValueError("NORMAL_OPERATIONAL_TIME_POLICY")
+        if engineering or case_id != "RulerClassic404":
+            raise ValueError("NORMAL_OPERATIONAL_TIME_SCOPE")
+        if phase == "worker":
+            return 7200
+        if phase == "finish":
+            return 1800
+    return 120 if engineering else 28800
+
+
 def main(argv=None):
     parser = NormalArgumentParser(allow_abbrev=False)
     parser.add_argument("--uv", type=Path, required=True)
@@ -42,6 +57,8 @@ def main(argv=None):
         raise ValueError("NORMAL_SETUP_NEW_SOURCE_BINDING")
     engineering = plan["engineering_only"] is True
     phase = tokens[tokens.index("--phase") + 1]
+    case_id = tokens[tokens.index("--case") + 1] if "--case" in tokens else None
+    timeout = execution_timeout(identity, engineering, case_id, phase)
     host_observer = phase == "accept"
     if not engineering and not host_observer and "CUDA_VISIBLE_DEVICES" in os.environ:
         raise ValueError("NORMAL_TARGET_MASK_FORBIDDEN")
@@ -176,7 +193,7 @@ def main(argv=None):
     try:
         with subprocess.Popen(child, env=env, cwd=root) as process:
             try:
-                return process.wait(timeout=120 if engineering else 28800)
+                return process.wait(timeout=timeout)
             except (subprocess.TimeoutExpired, KeyboardInterrupt):
                 import psutil
 

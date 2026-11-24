@@ -13,13 +13,29 @@ from normal_training_plan import digest, require
 from unified_normal_profiles import TINY, authenticate_package
 
 
-def build(parent, repository, wheel, recipe, data, output, case_id, runtime_sha256):
+def build(
+    parent,
+    repository,
+    wheel,
+    recipe,
+    data,
+    output,
+    case_id,
+    runtime_sha256,
+    *,
+    operational_time_policy=False,
+):
     """Freeze genuinely current science with the proven UV/two-rank/HF lifecycle."""
     parent, repository, wheel, recipe, data, output = map(
         lambda p: Path(p).resolve(), (parent, repository, wheel, recipe, data, output)
     )
     require(not output.exists(), "RULER_REQUEST_CREATE_ONLY")
     require(case_id in CASE_IDS and re.fullmatch(r"[0-9a-f]{64}", runtime_sha256), "RULER_CASE")
+    require(
+        type(operational_time_policy) is bool
+        and (not operational_time_policy or case_id == "RulerClassic404"),
+        "RULER_OPERATIONAL_TIME_SCOPE",
+    )
     authenticate_package(parent, TINY)
     members = wheel_sources(wheel, repository)
     output.mkdir(parents=True, exist_ok=False)
@@ -50,6 +66,11 @@ def build(parent, repository, wheel, recipe, data, output, case_id, runtime_sha2
         "tracking_policy": "AUXILIARY_NONBLOCKING_V1",
         "files": inventory(package),
     }
+    if operational_time_policy:
+        identity.update(
+            scope="RULER_CLASSIC404_OPERATIONAL_TIME_V1",
+            operational_time_policy="RULER_CLASSIC404_2H_V1",
+        )
     save(package / "normal-source-identity.json", identity)
     shutil.copyfile(repository / "scripts/unified_normal_task.py", output / "normal-task.py")
     shutil.copyfile(

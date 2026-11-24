@@ -13,7 +13,15 @@ REMAINING_FOUR = "REMAINING_FOUR_NONBLOCKING_TRACKING_V1"
 REMAINING_THREE = "REMAINING_THREE_FINISH_IMPORT_FIXED_V1"
 TINY = "TINY_INDEPENDENT_CURRENT_V1"
 RULER = "RULER_INDEPENDENT_CURRENT_V1"
+RULER_TIME = "RULER_CLASSIC404_OPERATIONAL_TIME_V1"
 PROFILES = {
+    RULER_TIME: {
+        "source": "eb38e08cc5af9647d7c10c8bb46d0747f17eb19c84e21d3332dab4ae66b2ff9b",
+        "archive": "c58cddc440db03b89c7cb3ff7453470d53dcb1df7a80c2854cc2a354bdd43b11",
+        "prefix": "normal-package/",
+        "wheel": "dc7f14bfa941624193089c8ca201df9f39c13d5592cb5ad32e2a2dbd92803475",
+        "review_policy": "EXTERNAL_TYPED_NORMAL_SOURCE_AND_PLAN",
+    },
     RULER: {
         "source": "d441b373062433461ec494366d8d2d469d30b553fb76c2c6e368de0ed3a965fa",
         "archive": "5f8aba988763ddca449df729d2c27bc4a81b2a1dfdb50c9105effee5e36b5c31",
@@ -83,6 +91,8 @@ def independent_adapter(name):
         import unified_normal_tiny as adapter
     elif name == RULER:
         import unified_normal_ruler as adapter
+    elif name == RULER_TIME:
+        import unified_normal_ruler_time as adapter
     else:
         return None
     return adapter
