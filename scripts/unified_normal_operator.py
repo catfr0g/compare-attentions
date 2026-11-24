@@ -355,6 +355,7 @@ def build(inputs, normal_archive, destination):
         "normal_training_tracking",
         "unified_normal_ruler",
         "unified_normal_ruler_time",
+        "unified_normal_ruler_delta_time",
     ):
         shutil.copyfile(Path(__file__).with_name(name + ".py"), host / (name + ".py"))
     integrate(host / "seed202_pilot", profile_name)

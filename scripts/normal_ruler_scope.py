@@ -77,6 +77,18 @@ def operational_case_rows():
     )
 
 
+def deltanet404_case_rows():
+    """Future Delta404 policy; preserve the accepted Classic404 and historical rows."""
+    return tuple(
+        {**row, "case_deadline_seconds": 14400} if row["case_id"] == "RulerDeltanet404" else row
+        for row in operational_case_rows()
+    )
+
+
+def deltanet404_case_specs(spec_type):
+    return tuple(spec_type(**row) for row in deltanet404_case_rows())
+
+
 def operational_case_specs(spec_type):
     return tuple(spec_type(**row) for row in operational_case_rows())
 

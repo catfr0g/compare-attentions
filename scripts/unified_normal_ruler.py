@@ -7,7 +7,13 @@ from pathlib import Path
 
 from normal_ruler_scope import CASE_IDS, case_rows, require_prefix, require_run
 from unified_normal_contract import descriptor, digest, read, require
-from unified_normal_profiles import RULER, RULER_TIME, authenticate_package, selected
+from unified_normal_profiles import (
+    RULER,
+    RULER_DELTA_TIME,
+    RULER_TIME,
+    authenticate_package,
+    selected,
+)
 
 
 def validate_request(value):
@@ -17,7 +23,8 @@ def validate_request(value):
     require(
         all(
             row["policy"] == "AUTHENTIC_HOST_NATIVE_V2_FULL_REPLAY"
-            and row["replay"]["profile"] == RULER
+            and row["replay"]["profile"]
+            == (RULER_TIME if row["case_id"] == "RulerClassic404" else RULER)
             for row in value["predecessors"]
         ),
         "RULER_ORDINARY_PREFIX_REQUIRED",
@@ -83,7 +90,7 @@ def build_request(inputs, output):
         "RULER_BUILD_INPUTS",
     )
     profile_name = inputs["source_profile"]
-    require(profile_name in {RULER, RULER_TIME}, "RULER_PROFILE")
+    require(profile_name in {RULER, RULER_TIME, RULER_DELTA_TIME}, "RULER_PROFILE")
     generation = intent(inputs["generation"], profile_name)
     rows = inputs["predecessors"]
     require(type(rows) is list, "RULER_PREFIX_SCHEMA")
@@ -156,7 +163,7 @@ def build_request(inputs, output):
         spec = row["replay"]
         require(
             set(spec) == {"profile", "source_request", "result", "data", "snapshot", "index"}
-            and spec["profile"] == RULER,
+            and spec["profile"] == (RULER_TIME if row["case_id"] == "RulerClassic404" else RULER),
             "RULER_PREFIX_REPLAY_SCHEMA",
         )
         previous = Path(spec["source_request"]).parents[2]
@@ -206,10 +213,14 @@ def deployment(payload, plan, run, generation, *, profile_name=RULER):
     from unified_normal_generation import intent_value, namespace
     from unified_normal_operator import save
 
-    require(profile_name in {RULER, RULER_TIME}, "RULER_PROFILE")
+    require(profile_name in {RULER, RULER_TIME, RULER_DELTA_TIME}, "RULER_PROFILE")
     intent_value(generation, profile_name)
     index = CASE_IDS.index(run["id"])
     row = case_rows()[index]
+    if profile_name == RULER_DELTA_TIME:
+        from normal_ruler_scope import deltanet404_case_rows
+
+        row = deltanet404_case_rows()[index]
     if profile_name == RULER_TIME:
         from normal_ruler_scope import operational_case_rows
 

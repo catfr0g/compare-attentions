@@ -16,6 +16,7 @@ from unified_normal_profiles import (
     REMAINING_THREE,
     REPAIRED,
     RULER,
+    RULER_DELTA_TIME,
     RULER_TIME,
     TINY,
     authenticate_review,
@@ -60,8 +61,11 @@ def intent_value(value, profile_name):
 
     if profile_name == TINY:
         from normal_tiny_scope import CASE_IDS  # independent finite group
-    if profile_name in {RULER, RULER_TIME}:
+    if profile_name in {RULER, RULER_TIME, RULER_DELTA_TIME}:
         from normal_ruler_scope import CASE_IDS
+
+    if profile_name == RULER_DELTA_TIME:
+        require(value["case_id"] == "RulerDeltanet404", "RULER_OPERATIONAL_TIME_SCOPE")
 
     if profile_name == RULER_TIME:
         require(value["case_id"] == "RulerClassic404", "RULER_OPERATIONAL_TIME_SCOPE")
@@ -76,7 +80,10 @@ def intent_value(value, profile_name):
         (
             (profile_name == REPAIRED and value["case_id"] == CASE)
             or (is_remaining_profile(profile_name) and value["case_id"] in CASE_IDS)
-            or (profile_name in {TINY, RULER, RULER_TIME} and value["case_id"] in CASE_IDS)
+            or (
+                profile_name in {TINY, RULER, RULER_TIME, RULER_DELTA_TIME}
+                and value["case_id"] in CASE_IDS
+            )
         )
         and value["source_identity_sha256"] == selected(profile_name)["source"],
         "UNIFIED_GENERATION_SCOPE",
@@ -90,7 +97,7 @@ def intent_value(value, profile_name):
         "UNIFIED_GENERATION_FRESH_NONCE",
     )
     authorization = value["authorization"]
-    if profile_name in {RULER, RULER_TIME}:
+    if profile_name in {RULER, RULER_TIME, RULER_DELTA_TIME}:
         from normal_ruler_scope import permission
 
         permission(authorization)
@@ -134,7 +141,7 @@ def prepare_case(inputs, output, runtime_sha256):
     """Re-derive through authenticated NORMAL derive, not by relabelling old case."""
     name = inputs["source_profile"]
     generation = intent(inputs["generation"], name)
-    if name not in {TINY, RULER, RULER_TIME} and not is_remaining_profile(name):
+    if name not in {TINY, RULER, RULER_TIME, RULER_DELTA_TIME} and not is_remaining_profile(name):
         authenticate_review(inputs["source_review"], name)
     # The new release is frozen UNBOUND; its source+plan review is required by
     # the existing typed NORMAL authority before preparation or credentials.

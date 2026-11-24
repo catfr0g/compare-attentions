@@ -32,8 +32,11 @@ def build(
     require(not output.exists(), "RULER_REQUEST_CREATE_ONLY")
     require(case_id in CASE_IDS and re.fullmatch(r"[0-9a-f]{64}", runtime_sha256), "RULER_CASE")
     require(
-        type(operational_time_policy) is bool
-        and (not operational_time_policy or case_id == "RulerClassic404"),
+        (
+            type(operational_time_policy) is bool
+            and (not operational_time_policy or case_id == "RulerClassic404")
+        )
+        or (operational_time_policy == "RULER_DELTANET404_4H_V1" and case_id == "RulerDeltanet404"),
         "RULER_OPERATIONAL_TIME_SCOPE",
     )
     authenticate_package(parent, TINY)
@@ -68,8 +71,16 @@ def build(
     }
     if operational_time_policy:
         identity.update(
-            scope="RULER_CLASSIC404_OPERATIONAL_TIME_V1",
-            operational_time_policy="RULER_CLASSIC404_2H_V1",
+            scope=(
+                "RULER_CLASSIC404_OPERATIONAL_TIME_V1"
+                if operational_time_policy is True
+                else "RULER_DELTANET404_OPERATIONAL_TIME_V1"
+            ),
+            operational_time_policy=(
+                "RULER_CLASSIC404_2H_V1"
+                if operational_time_policy is True
+                else operational_time_policy
+            ),
         )
     save(package / "normal-source-identity.json", identity)
     shutil.copyfile(repository / "scripts/unified_normal_task.py", output / "normal-task.py")

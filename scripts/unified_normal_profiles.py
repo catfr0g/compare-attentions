@@ -14,7 +14,15 @@ REMAINING_THREE = "REMAINING_THREE_FINISH_IMPORT_FIXED_V1"
 TINY = "TINY_INDEPENDENT_CURRENT_V1"
 RULER = "RULER_INDEPENDENT_CURRENT_V1"
 RULER_TIME = "RULER_CLASSIC404_OPERATIONAL_TIME_V1"
+RULER_DELTA_TIME = "RULER_DELTANET404_OPERATIONAL_TIME_V1"
 PROFILES = {
+    RULER_DELTA_TIME: {
+        "source": "ea97135a5c6d890d354cab6a9675efd9a955271d36b7fba4ff22ed41ad1b0579",
+        "archive": "82d50d7bc2c7d8dc8f6c66faafbb2ee1cc6e3f4ce562c70ecf9d4b754dbda65f",
+        "prefix": "normal-package/",
+        "wheel": "dc7f14bfa941624193089c8ca201df9f39c13d5592cb5ad32e2a2dbd92803475",
+        "review_policy": "EXTERNAL_TYPED_NORMAL_SOURCE_AND_PLAN",
+    },
     RULER_TIME: {
         "source": "eb38e08cc5af9647d7c10c8bb46d0747f17eb19c84e21d3332dab4ae66b2ff9b",
         "archive": "c58cddc440db03b89c7cb3ff7453470d53dcb1df7a80c2854cc2a354bdd43b11",
@@ -93,6 +101,8 @@ def independent_adapter(name):
         import unified_normal_ruler as adapter
     elif name == RULER_TIME:
         import unified_normal_ruler_time as adapter
+    elif name == RULER_DELTA_TIME:
+        import unified_normal_ruler_delta_time as adapter
     else:
         return None
     return adapter

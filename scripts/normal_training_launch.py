@@ -18,12 +18,17 @@ def execution_timeout(identity, engineering, case_id, phase):
     """Finite future source policy; no arbitrary deadline or scientific overrides."""
     policy = identity.get("operational_time_policy")
     if policy is not None:
-        if policy != "RULER_CLASSIC404_2H_V1":
+        policies = {
+            "RULER_CLASSIC404_2H_V1": ("RulerClassic404", 7200),
+            "RULER_DELTANET404_4H_V1": ("RulerDeltanet404", 14400),
+        }
+        if type(policy) is not str or policy not in policies:
             raise ValueError("NORMAL_OPERATIONAL_TIME_POLICY")
-        if engineering or case_id != "RulerClassic404":
+        selected_case, deadline = policies[policy]
+        if engineering or case_id != selected_case:
             raise ValueError("NORMAL_OPERATIONAL_TIME_SCOPE")
         if phase == "worker":
-            return 7200
+            return deadline
         if phase == "finish":
             return 1800
     return 120 if engineering else 28800
